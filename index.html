@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Dashboard - PEA </title>
+    <title>Motorola P25 Maintenance Dashboard - PEA C1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -12,25 +12,52 @@
 <body class="bg-slate-100 font-sans text-slate-800">
 
     <div id="app" class="min-h-screen flex flex-col">
-        <!-- HEADER -->
+
+        <!-- ==================== LOGIN SCREEN ==================== -->
+        <div v-if="!session" class="min-h-screen flex items-center justify-center bg-purple-900 p-4">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+                <div class="text-center mb-6">
+                    <i class="fa-solid fa-tower-cell text-3xl text-purple-700"></i>
+                    <h1 class="font-bold text-slate-800 mt-2">P25 Maintenance Dashboard</h1>
+                    <p class="text-xs text-slate-500">กฟภ. ภาคกลาง เขต 1 (กฟก.1)</p>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">ชื่อผู้ใช้งาน</label>
+                        <input v-model="loginForm.username" @keyup.enter="submitLogin" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">รหัสผ่าน</label>
+                        <input v-model="loginForm.password" @keyup.enter="submitLogin" type="password" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <p v-if="loginForm.error" class="text-xs text-red-600">{{ loginForm.error }}</p>
+                    <button @click="submitLogin" :disabled="loginForm.loading" class="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition">
+                        {{ loginForm.loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== MAIN DASHBOARD ==================== -->
+        <template v-else>
         <header class="bg-purple-900 text-white shadow-lg sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
                 <div class="flex items-center space-x-3">
                     <i class="fa-solid font-bold text-2xl fa-tower-cell text-amber-400"></i>
                     <div>
-                        <h1 class="text-lg font-bold leading-tight">ระบบติดตามงานซ่อมบำรุงวิทยุสื่อสาร</h1>
+                        <h1 class="text-lg font-bold leading-tight">ระบบติดตามงานซ่อมบำรุงวิทยุสื่อสาร Motorola P25</h1>
                         <p class="text-xs text-purple-200">กฟภ. ภาคกลาง เขต 1 (กฟก.1)</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-3 text-sm bg-purple-800 px-3 py-1.5 rounded-lg">
                     <i class="fa-solid fa-user-circle text-lg"></i>
                     <div>
-                        <span class="font-semibold block leading-none">{{ currentUser.name }}</span>
-                        <span class="text-[10px] text-amber-300 uppercase">{{ currentUser.role }}</span>
+                        <span class="font-semibold block leading-none">{{ session.displayName }}</span>
+                        <span class="text-[10px] text-amber-300 uppercase">{{ roleLabel(session.role) }}</span>
                     </div>
-                    <select v-model="currentUser" class="bg-purple-900 text-xs rounded p-1 text-white border border-purple-600 focus:outline-none">
-                        <option v-for="user in users" :key="user.id" :value="user">{{ user.roleName }}</option>
-                    </select>
+                    <button @click="doLogout" title="ออกจากระบบ" class="text-purple-200 hover:text-white ml-1">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
                 </div>
             </div>
         </header>
@@ -40,7 +67,7 @@
             <!-- CONNECTION ERROR BANNER -->
             <div v-if="apiError" class="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg flex items-center">
                 <i class="fa-solid fa-triangle-exclamation mr-2"></i>
-                เชื่อมต่อ API ไม่สำเร็จ: {{ apiError }} — ตรวจสอบว่าตั้งค่า API_URL และ deploy Web App ถูกต้อง
+                {{ apiError }}
             </div>
 
             <!-- IMPORT / HISTORY TOOLBAR -->
@@ -55,8 +82,11 @@
                     <button @click="showTrend = !showTrend" class="text-xs px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">
                         <i class="fa-solid fa-chart-line mr-1"></i> {{ showTrend ? 'ซ่อนแนวโน้ม' : 'ดูแนวโน้มย้อนหลัง' }}
                     </button>
+                    <a v-if="selectedImportExcelUrl" :href="selectedImportExcelUrl" target="_blank" class="text-xs px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium text-slate-600">
+                        <i class="fa-solid fa-file-excel mr-1 text-emerald-600"></i> ไฟล์ Excel ต้นฉบับของรอบนี้
+                    </a>
                 </div>
-                <div v-if="currentUser.role !== 'executive'" class="flex items-center gap-2">
+                <div v-if="session.role === 'admin'" class="flex items-center gap-2">
                     <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="handleFileChange">
                     <button @click="$refs.fileInput.click()" :disabled="importing"
                             class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs px-3 py-2 rounded-lg font-medium transition flex items-center">
@@ -113,16 +143,11 @@
 
             <!-- CM WORK ORDERS -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <div>
-                        <h2 class="font-bold text-slate-800 flex items-center">
-                            <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
-                        </h2>
-                        <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน)</p>
-                    </div>
-                    <button v-if="currentUser.role !== 'executive'" @click="newTicketModal.open = true" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition flex items-center">
-                        <i class="fa-solid fa-plus mr-1"></i> เปิดใบงาน CM ใหม่
-                    </button>
+                <div class="p-4 border-b border-slate-100 bg-slate-50">
+                    <h2 class="font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
+                    </h2>
+                    <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน) — รายการใหม่มาจากไฟล์ Excel ที่นำเข้าในแต่ละรอบ</p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-sm">
@@ -134,7 +159,6 @@
                                 <th class="p-3">เวลาที่รับแจ้ง</th>
                                 <th class="p-3">SLA คงเหลือ</th>
                                 <th class="p-3">สถานะ</th>
-                                <th class="p-3 text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -149,7 +173,7 @@
                                     </span>
                                 </td>
                                 <td class="p-3">
-                                    <select v-if="currentUser.role !== 'executive'" v-model="item.status" @change="updateStatus(item)"
+                                    <select v-if="session.role === 'admin'" v-model="item.status" @change="updateStatus(item)"
                                             :class="getStatusBadgeClass(displayStatus(item))" class="text-xs px-2 py-1 rounded font-medium border-0 focus:outline-none">
                                         <option value="รอดำเนินการ">รอดำเนินการ</option>
                                         <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
@@ -159,12 +183,9 @@
                                         {{ displayStatus(item) }}
                                     </span>
                                 </td>
-                                <td class="p-3 text-center text-slate-300">
-                                    <i class="fa-solid fa-eye"></i>
-                                </td>
                             </tr>
                             <tr v-if="dashboard.cmTickets.length === 0">
-                                <td colspan="7" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ในขณะนี้</td>
+                                <td colspan="6" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ในรอบนี้</td>
                             </tr>
                         </tbody>
                     </table>
@@ -267,53 +288,57 @@
                 </div>
             </div>
 
-        </main>
-
-        <!-- NEW CM TICKET MODAL -->
-        <div v-if="newTicketModal.open" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
-                <h3 class="font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-plus text-purple-600 mr-2"></i> เปิดใบงาน CM ใหม่</h3>
-                <div class="space-y-3">
-                    <div>
-                        <label class="text-xs font-bold text-slate-500">สถานที่</label>
-                        <input v-model="newTicketModal.site" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+            <!-- USER MANAGEMENT (Admin only) -->
+            <div v-if="session.role === 'admin'" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="font-bold text-slate-800 mb-4 flex items-center">
+                    <i class="fa-solid fa-users-gear text-purple-600 mr-2"></i> จัดการผู้ใช้งาน
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-2">
+                        <div v-for="u in users" :key="u.username" class="flex justify-between items-center p-2.5 rounded border border-slate-100 text-sm">
+                            <div>
+                                <span class="font-medium text-slate-700">{{ u.displayName }}</span>
+                                <span class="text-xs text-slate-400 ml-1">({{ u.username }})</span>
+                            </div>
+                            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{{ roleLabel(u.role) }}</span>
+                        </div>
+                        <div v-if="users.length === 0" class="text-sm text-slate-400 text-center py-4">ยังไม่มีผู้ใช้งาน</div>
                     </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-500">จังหวัด</label>
-                        <input v-model="newTicketModal.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    <div class="space-y-2 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6">
+                        <input v-model="newUserForm.displayName" type="text" placeholder="ชื่อที่แสดง" class="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-purple-500">
+                        <input v-model="newUserForm.username" type="text" placeholder="ชื่อผู้ใช้งาน (username)" class="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-purple-500">
+                        <input v-model="newUserForm.password" type="password" placeholder="รหัสผ่าน" class="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-purple-500">
+                        <select v-model="newUserForm.role" class="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-purple-500">
+                            <option value="pea">เจ้าหน้าที่ PEA (ดูอย่างเดียว)</option>
+                            <option value="admin">ผู้ดูแลระบบ (ทำได้ทุกอย่าง)</option>
+                        </select>
+                        <p v-if="newUserForm.error" class="text-xs text-red-600">{{ newUserForm.error }}</p>
+                        <button @click="submitNewUser" :disabled="newUserForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
+                            {{ newUserForm.saving ? 'กำลังบันทึก...' : 'เพิ่มผู้ใช้งาน' }}
+                        </button>
                     </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
-                        <input v-model="newTicketModal.system" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 mt-5">
-                    <button @click="newTicketModal.open = false" class="text-xs px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50">ยกเลิก</button>
-                    <button @click="submitNewTicket" :disabled="newTicketModal.saving" class="text-xs px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium">
-                        {{ newTicketModal.saving ? 'กำลังบันทึก...' : 'บันทึกใบงาน' }}
-                    </button>
                 </div>
             </div>
-        </div>
+
+        </main>
+        </template>
     </div>
 
     <script>
         const { createApp } = Vue;
 
         // TODO: วาง Web App URL ที่ได้จากการ Deploy Google Apps Script ตรงนี้
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxxUCQk03kQGuj24D5dDrvoJjKhCWcwVpFByd73BYYtuIuzjaI668gU7gYTfRSjlTRa/exec';
+        const API_URL = 'https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec';
+        const TOKEN_STORAGE_KEY = 'p25_dashboard_session';
 
         createApp({
             data() {
                 return {
+                    session: null,     // { token, username, role, displayName }
+                    loginForm: { username: '', password: '', loading: false, error: '' },
+
                     apiError: '',
                     searchQuery: '',
-                    users: [
-                        { id: 1, name: 'คุณวิศวกร ผู้ดูแลระบบ', role: 'admin', roleName: 'ผู้ดูแลระบบ (Admin)' },
-                        { id: 2, name: 'เจ้าหน้าที่ กฟภ.1', role: 'officer', roleName: 'เจ้าหน้าที่ กฟภ. (Officer)' },
-                        { id: 3, name: 'ผู้บริหาร กฟภ.', role: 'executive', roleName: 'ผู้บริหาร (Executive View)' },
-                    ],
-                    currentUser: null,
 
                     importHistory: [],
                     currentImportId: null,
@@ -325,7 +350,8 @@
                     reportFiles: [],
                     reportRange: 1,
 
-                    newTicketModal: { open: false, site: '', province: '', system: '', saving: false },
+                    users: [],
+                    newUserForm: { username: '', password: '', displayName: '', role: 'pea', saving: false, error: '' },
 
                     charts: { overall: null, site: null, trend: null },
                 };
@@ -344,25 +370,83 @@
                     const found = this.importHistory.find(h => h.importId === this.currentImportId);
                     return found ? found.periodLabel : '-';
                 },
-            },
-            created() {
-                this.currentUser = this.users[0];
+                selectedImportExcelUrl() {
+                    const found = this.importHistory.find(h => h.importId === this.currentImportId);
+                    return found ? found.excelFileUrl : '';
+                },
             },
             async mounted() {
-                await this.loadImportHistory();
-                await this.loadReportFiles();
+                const saved = localStorage.getItem(TOKEN_STORAGE_KEY);
+                if (saved) {
+                    try {
+                        this.session = JSON.parse(saved);
+                        await this.loadImportHistory();
+                        await this.loadReportFiles();
+                        if (this.session.role === 'admin') await this.loadUsers();
+                    } catch (err) {
+                        this.session = null;
+                        localStorage.removeItem(TOKEN_STORAGE_KEY);
+                    }
+                }
             },
             methods: {
+                roleLabel(role) {
+                    return { admin: 'ผู้ดูแลระบบ', pea: 'เจ้าหน้าที่ PEA' }[role] || role;
+                },
+
+                async submitLogin() {
+                    if (!this.loginForm.username || !this.loginForm.password) {
+                        this.loginForm.error = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+                        return;
+                    }
+                    this.loginForm.loading = true;
+                    this.loginForm.error = '';
+                    try {
+                        const res = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({
+                                action: 'login',
+                                params: { username: this.loginForm.username, password: this.loginForm.password },
+                            }),
+                        });
+                        const json = await res.json();
+                        if (!json.ok) throw new Error(json.error || 'เข้าสู่ระบบไม่สำเร็จ');
+
+                        this.session = json.data;
+                        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(this.session));
+                        this.loginForm = { username: '', password: '', loading: false, error: '' };
+                        await this.loadImportHistory();
+                        await this.loadReportFiles();
+                        if (this.session.role === 'admin') await this.loadUsers();
+                    } catch (err) {
+                        this.loginForm.error = err.message;
+                        this.loginForm.loading = false;
+                    }
+                },
+
+                async doLogout() {
+                    try { await this.api('logout'); } catch (err) { /* ignore */ }
+                    this.session = null;
+                    localStorage.removeItem(TOKEN_STORAGE_KEY);
+                },
+
                 /** Single bridge to the GAS Web App — mirrors the dispatch(action, params) convention */
                 async api(action, params) {
                     const res = await fetch(API_URL, {
                         method: 'POST',
                         // text/plain avoids a CORS preflight against the Apps Script endpoint
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action, params: params || {} }),
+                        body: JSON.stringify({ action, params: Object.assign({}, params, { token: this.session ? this.session.token : null }) }),
                     });
                     const json = await res.json();
-                    if (!json.ok) throw new Error(json.error || 'ไม่ทราบสาเหตุ');
+                    if (!json.ok) {
+                        if (/เข้าสู่ระบบ|เซสชันหมดอายุ/.test(json.error || '')) {
+                            this.session = null;
+                            localStorage.removeItem(TOKEN_STORAGE_KEY);
+                        }
+                        throw new Error(json.error || 'ไม่ทราบสาเหตุ');
+                    }
                     return json.data;
                 },
 
@@ -437,23 +521,31 @@
                     reader.readAsDataURL(file);
                 },
 
-                async submitNewTicket() {
-                    if (!this.newTicketModal.site || !this.newTicketModal.system) {
-                        alert('กรุณากรอกสถานที่และอุปกรณ์ที่ขัดข้อง');
+                async loadUsers() {
+                    try {
+                        this.users = await this.api('getUsers');
+                    } catch (err) {
+                        this.apiError = err.message;
+                    }
+                },
+
+                async submitNewUser() {
+                    const f = this.newUserForm;
+                    if (!f.username || !f.password || !f.displayName) {
+                        f.error = 'กรุณากรอกให้ครบทุกช่อง';
                         return;
                     }
-                    this.newTicketModal.saving = true;
+                    f.saving = true;
+                    f.error = '';
                     try {
-                        await this.api('addCmTicket', {
-                            site: this.newTicketModal.site,
-                            province: this.newTicketModal.province,
-                            system: this.newTicketModal.system,
+                        await this.api('createUser', {
+                            username: f.username, password: f.password, displayName: f.displayName, role: f.role,
                         });
-                        this.newTicketModal = { open: false, site: '', province: '', system: '', saving: false };
-                        await this.loadDashboard(this.currentImportId);
+                        this.newUserForm = { username: '', password: '', displayName: '', role: 'pea', saving: false, error: '' };
+                        await this.loadUsers();
                     } catch (err) {
-                        alert('บันทึกใบงานไม่สำเร็จ: ' + err.message);
-                        this.newTicketModal.saving = false;
+                        f.error = err.message;
+                        f.saving = false;
                     }
                 },
 
