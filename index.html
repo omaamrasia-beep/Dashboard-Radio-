@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motorola P25 Maintenance Dashboard - PEA C1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 font-sans text-slate-800">
+
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- HEADER -->
+        <header class="bg-purple-900 text-white shadow-lg sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid font-bold text-2xl fa-tower-cell text-amber-400"></i>
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight">ระบบติดตามงานซ่อมบำรุงวิทยุสื่อสาร Motorola P25</h1>
+                        <p class="text-xs text-purple-200">กฟภ. ภาคกลาง เขต 1 (กฟก.1)</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3 text-sm bg-purple-800 px-3 py-1.5 rounded-lg">
+                    <i class="fa-solid fa-user-circle text-lg"></i>
+                    <div>
+                        <span class="font-semibold block leading-none">{{ currentUser.name }}</span>
+                        <span class="text-[10px] text-amber-300 uppercase">{{ currentUser.role }}</span>
+                    </div>
+                    <select v-model="currentUser" class="bg-purple-900 text-xs rounded p-1 text-white border border-purple-600 focus:outline-none">
+                        <option v-for="user in users" :key="user.id" :value="user">{{ user.roleName }}</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
+
+            <!-- CONNECTION ERROR BANNER -->
+            <div v-if="apiError" class="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg flex items-center">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+                เชื่อมต่อ API ไม่สำเร็จ: {{ apiError }} — ตรวจสอบว่าตั้งค่า API_URL และ deploy Web App ถูกต้อง
+            </div>
+
+            <!-- IMPORT / HISTORY TOOLBAR -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center gap-3 justify-between">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-slate-500 uppercase">รอบข้อมูล</label>
+                    <select v-model="currentImportId" @change="onSelectImportRound" class="text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-purple-500 min-w-[220px]">
+                        <option v-for="h in importHistory" :key="h.importId" :value="h.importId">
+                            {{ h.periodLabel }} ({{ formatDate(h.dataDate) }})
+                        </option>
+                    </select>
+                    <button @click="showTrend = !showTrend" class="text-xs px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">
+                        <i class="fa-solid fa-chart-line mr-1"></i> {{ showTrend ? 'ซ่อนแนวโน้ม' : 'ดูแนวโน้มย้อนหลัง' }}
+                    </button>
+                </div>
+                <div v-if="currentUser.role !== 'executive'" class="flex items-center gap-2">
+                    <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="handleFileChange">
+                    <button @click="$refs.fileInput.click()" :disabled="importing"
+                            class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs px-3 py-2 rounded-lg font-medium transition flex items-center">
+                        <i class="fa-solid" :class="importing ? 'fa-spinner fa-spin' : 'fa-file-import'"></i>
+                        <span class="ml-1">{{ importing ? 'กำลังนำเข้า...' : 'นำเข้าข้อมูล Excel' }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TREND (ย้อนหลังเทียบหลายรอบ) -->
+            <div v-if="showTrend" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-sm font-bold text-slate-700 mb-4 flex items-center">
+                    <i class="fa-solid fa-chart-line mr-2 text-purple-600"></i> แนวโน้มเทียบแต่ละรอบข้อมูล
+                </h2>
+                <div class="relative h-56">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- KPI SUMMARY CARDS -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div v-for="site in dashboard.sitesSummary" :key="site.type" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-slate-500 uppercase">{{ site.type }}</span>
+                        <i class="fa-solid fa-tower-cell text-purple-600 text-lg"></i>
+                    </div>
+                    <div class="text-2xl font-extrabold text-slate-800">{{ site.count }} <span class="text-xs font-normal text-slate-500">{{ site.unit }}</span></div>
+                    <p class="text-[11px] text-emerald-600 mt-1"><i class="fa-solid fa-check-circle"></i> พร้อมใช้งานปกติ</p>
+                </div>
+                <div v-if="dashboard.sitesSummary.length === 0" class="col-span-full text-center text-sm text-slate-400 py-6">
+                    ยังไม่มีข้อมูล — นำเข้าไฟล์ Excel เพื่อเริ่มต้น
+                </div>
+            </div>
+
+            <!-- CHARTS -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-sm font-bold text-slate-700 mb-4 flex items-center">
+                        <i class="fa-solid fa-chart-pie mr-2 text-purple-600"></i> สัดส่วนสถานะงาน CM
+                    </h2>
+                    <div class="relative h-48">
+                        <canvas id="overallChart"></canvas>
+                    </div>
+                </div>
+                <div class="md:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-sm font-bold text-slate-700 mb-4 flex items-center">
+                        <i class="fa-solid fa-chart-column mr-2 text-purple-600"></i> จำนวนอุปกรณ์ตามสถานที่ติดตั้ง (10 อันดับแรก)
+                    </h2>
+                    <div class="relative h-48">
+                        <canvas id="siteChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CM WORK ORDERS -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h2 class="font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
+                        </h2>
+                        <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน)</p>
+                    </div>
+                    <button v-if="currentUser.role !== 'executive'" @click="newTicketModal.open = true" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition flex items-center">
+                        <i class="fa-solid fa-plus mr-1"></i> เปิดใบงาน CM ใหม่
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 text-xs uppercase border-b">
+                                <th class="p-3">Ticket ID</th>
+                                <th class="p-3">สถานที่ติดตั้งอุปกรณ์</th>
+                                <th class="p-3">อุปกรณ์ที่ขัดข้อง</th>
+                                <th class="p-3">เวลาที่รับแจ้ง</th>
+                                <th class="p-3">SLA คงเหลือ</th>
+                                <th class="p-3">สถานะ</th>
+                                <th class="p-3 text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="item in dashboard.cmTickets" :key="item.ticketId" class="hover:bg-slate-50">
+                                <td class="p-3 font-mono font-bold text-purple-700">{{ item.ticketId }}</td>
+                                <td class="p-3"><span class="font-semibold block">{{ item.site }}</span><span class="text-xs text-slate-400">{{ item.province }}</span></td>
+                                <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system }}</span></td>
+                                <td class="p-3 text-xs text-slate-500">{{ formatDateTime(item.reportedAt) }}</td>
+                                <td class="p-3">
+                                    <span :class="getSlaBadgeClass(item)" class="px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center">
+                                        <i class="fa-regular fa-clock mr-1"></i> {{ formatSlaTime(item) }}
+                                    </span>
+                                </td>
+                                <td class="p-3">
+                                    <select v-if="currentUser.role !== 'executive'" v-model="item.status" @change="updateStatus(item)"
+                                            :class="getStatusBadgeClass(displayStatus(item))" class="text-xs px-2 py-1 rounded font-medium border-0 focus:outline-none">
+                                        <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                        <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                        <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                                    </select>
+                                    <span v-else :class="getStatusBadgeClass(displayStatus(item))" class="text-xs px-2 py-0.5 rounded font-medium">
+                                        {{ displayStatus(item) }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-center text-slate-300">
+                                    <i class="fa-solid fa-eye"></i>
+                                </td>
+                            </tr>
+                            <tr v-if="dashboard.cmTickets.length === 0">
+                                <td colspan="7" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ในขณะนี้</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- INSTALLATION SITES -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h2 class="font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-list text-purple-600 mr-2"></i> รายการสถานที่ติดตั้งอุปกรณ์ระบบวิทยุสื่อสารแบบ Digital กฟก.1
+                        </h2>
+                        <p class="text-xs text-slate-500">ข้อมูลของรอบ: {{ selectedImportLabel }}</p>
+                    </div>
+                    <div class="w-64">
+                        <input v-model="searchQuery" type="text" placeholder="ค้นหาสถานที่/อุปกรณ์..." class="w-full text-xs p-2 border border-slate-300 rounded-lg focus:outline-none focus:border-purple-500">
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-80">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="sticky top-0 bg-slate-100 text-slate-600 uppercase border-b">
+                            <tr>
+                                <th class="p-2.5 text-center w-12">ลำดับ</th>
+                                <th class="p-2.5">สถานที่ติดตั้งอุปกรณ์</th>
+                                <th class="p-2.5">อุปกรณ์ที่ติดตั้ง</th>
+                                <th class="p-2.5 text-center w-24">จำนวน (ชุด)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="item in filteredInstallationSites" :key="item.no" class="hover:bg-slate-50">
+                                <td class="p-2.5 text-center font-bold text-slate-400">{{ item.no }}</td>
+                                <td class="p-2.5 font-medium text-slate-800">{{ item.location }}</td>
+                                <td class="p-2.5 text-slate-600"><span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100">{{ item.equipment }}</span></td>
+                                <td class="p-2.5 text-center font-bold text-slate-700">{{ item.quantity }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- PM STATUS & REPORT LIBRARY -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-slate-800 mb-3 flex items-center">
+                        <i class="fa-solid fa-list-check text-emerald-600 mr-2"></i> สถานะแผนงานบำรุงรักษา PM (รายไตรมาส)
+                    </h2>
+                    <div class="space-y-4">
+                        <div v-for="pm in dashboard.pmStatus" :key="pm.quarter" class="border border-slate-100 p-3 rounded-lg bg-slate-50">
+                            <div class="flex justify-between text-xs font-bold mb-1">
+                                <span>{{ pm.quarter }}</span>
+                                <span :class="pm.percent === 100 ? 'text-emerald-600' : 'text-amber-600'">{{ pm.percent }}% เสร็จสิ้น</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2">
+                                <div class="bg-emerald-500 h-2 rounded-full" :style="{ width: pm.percent + '%' }"></div>
+                            </div>
+                            <div class="flex justify-between text-[11px] text-slate-400 mt-2">
+                                <span>เสร็จแล้ว {{ pm.done }}/{{ pm.total }} จุด</span>
+                                <span>{{ pm.period }}</span>
+                            </div>
+                        </div>
+                        <div v-if="dashboard.pmStatus.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูล PM ในรอบนี้</div>
+                    </div>
+                </div>
+
+                <!-- คลังไฟล์รายงาน — ดึงจาก Google Drive folder โดยตรง -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <h2 class="font-bold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-cloud-arrow-down text-blue-600 mr-2"></i> คลังรายงาน PM/CM
+                            </h2>
+                            <select v-model.number="reportRange" @change="loadReportFiles" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
+                                <option :value="1">ย้อนหลัง 1 เดือน</option>
+                                <option :value="6">ย้อนหลัง 6 เดือน</option>
+                                <option :value="0">ทั้งหมด</option>
+                            </select>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">ไฟล์ที่จัดเก็บไว้ใน Google Drive ตามช่วงเวลาที่เลือก</p>
+
+                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                            <div v-for="report in reportFiles" :key="report.fileId" class="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded border border-slate-100 text-xs">
+                                <div class="flex items-center space-x-2 min-w-0">
+                                    <i :class="report.type === 'PDF' ? 'fa-file-pdf text-red-500' : 'fa-file-excel text-emerald-600'" class="text-base"></i>
+                                    <div class="min-w-0">
+                                        <span class="font-medium text-slate-700 block truncate">{{ report.name }}</span>
+                                        <span class="text-[10px] text-slate-400">{{ formatDate(report.dateCreated) }} | {{ report.size }}</span>
+                                    </div>
+                                </div>
+                                <a :href="report.url" target="_blank" class="bg-slate-100 hover:bg-purple-100 text-purple-700 px-2.5 py-1 rounded text-xs transition shrink-0 ml-2">
+                                    <i class="fa-solid fa-download mr-1"></i> เปิด
+                                </a>
+                            </div>
+                            <div v-if="reportFiles.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่พบไฟล์ในช่วงเวลาที่เลือก</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-100 text-right">
+                        <span class="text-[11px] text-slate-400"><i class="fa-solid fa-shield-check text-emerald-500"></i> จัดเก็บไฟล์บน Google Drive</span>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- NEW CM TICKET MODAL -->
+        <div v-if="newTicketModal.open" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+                <h3 class="font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-plus text-purple-600 mr-2"></i> เปิดใบงาน CM ใหม่</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">สถานที่</label>
+                        <input v-model="newTicketModal.site" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">จังหวัด</label>
+                        <input v-model="newTicketModal.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
+                        <input v-model="newTicketModal.system" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-5">
+                    <button @click="newTicketModal.open = false" class="text-xs px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50">ยกเลิก</button>
+                    <button @click="submitNewTicket" :disabled="newTicketModal.saving" class="text-xs px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium">
+                        {{ newTicketModal.saving ? 'กำลังบันทึก...' : 'บันทึกใบงาน' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        // TODO: วาง Web App URL ที่ได้จากการ Deploy Google Apps Script ตรงนี้
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxxUCQk03kQGuj24D5dDrvoJjKhCWcwVpFByd73BYYtuIuzjaI668gU7gYTfRSjlTRa/exec';
+
+        createApp({
+            data() {
+                return {
+                    apiError: '',
+                    searchQuery: '',
+                    users: [
+                        { id: 1, name: 'คุณวิศวกร ผู้ดูแลระบบ', role: 'admin', roleName: 'ผู้ดูแลระบบ (Admin)' },
+                        { id: 2, name: 'เจ้าหน้าที่ กฟภ.1', role: 'officer', roleName: 'เจ้าหน้าที่ กฟภ. (Officer)' },
+                        { id: 3, name: 'ผู้บริหาร กฟภ.', role: 'executive', roleName: 'ผู้บริหาร (Executive View)' },
+                    ],
+                    currentUser: null,
+
+                    importHistory: [],
+                    currentImportId: null,
+                    dashboard: { sitesSummary: [], installationSites: [], pmStatus: [], cmTickets: [] },
+                    trend: [],
+                    showTrend: false,
+                    importing: false,
+
+                    reportFiles: [],
+                    reportRange: 1,
+
+                    newTicketModal: { open: false, site: '', province: '', system: '', saving: false },
+
+                    charts: { overall: null, site: null, trend: null },
+                };
+            },
+            computed: {
+                filteredInstallationSites() {
+                    const list = this.dashboard.installationSites;
+                    if (!this.searchQuery) return list;
+                    const q = this.searchQuery.toLowerCase();
+                    return list.filter(item =>
+                        (item.location || '').toLowerCase().includes(q) ||
+                        (item.equipment || '').toLowerCase().includes(q)
+                    );
+                },
+                selectedImportLabel() {
+                    const found = this.importHistory.find(h => h.importId === this.currentImportId);
+                    return found ? found.periodLabel : '-';
+                },
+            },
+            created() {
+                this.currentUser = this.users[0];
+            },
+            async mounted() {
+                await this.loadImportHistory();
+                await this.loadReportFiles();
+            },
+            methods: {
+                /** Single bridge to the GAS Web App — mirrors the dispatch(action, params) convention */
+                async api(action, params) {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        // text/plain avoids a CORS preflight against the Apps Script endpoint
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action, params: params || {} }),
+                    });
+                    const json = await res.json();
+                    if (!json.ok) throw new Error(json.error || 'ไม่ทราบสาเหตุ');
+                    return json.data;
+                },
+
+                async loadImportHistory() {
+                    try {
+                        this.apiError = '';
+                        this.importHistory = await this.api('getImportHistory');
+                        if (this.importHistory.length > 0) {
+                            this.currentImportId = this.importHistory[0].importId; // newest
+                            await this.loadDashboard(this.currentImportId);
+                        }
+                    } catch (err) {
+                        this.apiError = err.message;
+                    }
+                },
+
+                async loadDashboard(importId) {
+                    try {
+                        this.apiError = '';
+                        this.dashboard = await this.api('getDashboardData', { importId });
+                        this.$nextTick(() => this.renderMainCharts());
+                    } catch (err) {
+                        this.apiError = err.message;
+                    }
+                },
+
+                onSelectImportRound() {
+                    this.loadDashboard(this.currentImportId);
+                },
+
+                async loadTrend() {
+                    try {
+                        this.trend = await this.api('getTrend');
+                        this.$nextTick(() => this.renderTrendChart());
+                    } catch (err) {
+                        this.apiError = err.message;
+                    }
+                },
+
+                async loadReportFiles() {
+                    try {
+                        this.reportFiles = await this.api('getReportFiles', { rangeMonths: this.reportRange });
+                    } catch (err) {
+                        this.apiError = err.message;
+                    }
+                },
+
+                handleFileChange(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    this.importing = true;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        try {
+                            const base64 = reader.result.split(',')[1];
+                            const { importId } = await this.api('importExcel', {
+                                fileName: file.name,
+                                mimeType: file.type,
+                                base64: base64,
+                            });
+                            await this.loadImportHistory();
+                            this.currentImportId = importId;
+                            await this.loadDashboard(importId);
+                        } catch (err) {
+                            this.apiError = err.message;
+                            alert('นำเข้าข้อมูลไม่สำเร็จ: ' + err.message);
+                        } finally {
+                            this.importing = false;
+                            e.target.value = '';
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                async submitNewTicket() {
+                    if (!this.newTicketModal.site || !this.newTicketModal.system) {
+                        alert('กรุณากรอกสถานที่และอุปกรณ์ที่ขัดข้อง');
+                        return;
+                    }
+                    this.newTicketModal.saving = true;
+                    try {
+                        await this.api('addCmTicket', {
+                            site: this.newTicketModal.site,
+                            province: this.newTicketModal.province,
+                            system: this.newTicketModal.system,
+                        });
+                        this.newTicketModal = { open: false, site: '', province: '', system: '', saving: false };
+                        await this.loadDashboard(this.currentImportId);
+                    } catch (err) {
+                        alert('บันทึกใบงานไม่สำเร็จ: ' + err.message);
+                        this.newTicketModal.saving = false;
+                    }
+                },
+
+                async updateStatus(item) {
+                    try {
+                        await this.api('updateCmTicketStatus', { ticketId: item.ticketId, status: item.status });
+                        await this.loadDashboard(this.currentImportId);
+                    } catch (err) {
+                        alert('อัปเดตสถานะไม่สำเร็จ: ' + err.message);
+                    }
+                },
+
+                displayStatus(item) {
+                    if (item.status !== 'เสร็จสิ้น' && item.slaHoursLeft < 0) return 'เกิน SLA';
+                    return item.status;
+                },
+                formatSlaTime(item) {
+                    if (item.status === 'เสร็จสิ้น') return 'ดำเนินการเสร็จแล้ว';
+                    if (item.slaHoursLeft < 0) return `เกินกำหนด ${Math.abs(item.slaHoursLeft)} ชม.`;
+                    return `เหลืออีก ${item.slaHoursLeft} ชม.`;
+                },
+                getSlaBadgeClass(item) {
+                    if (item.status === 'เสร็จสิ้น') return 'bg-slate-100 text-slate-600';
+                    if (item.slaHoursLeft < 0) return 'bg-red-100 text-red-700 animate-pulse';
+                    if (item.slaHoursLeft <= 4) return 'bg-amber-100 text-amber-800';
+                    return 'bg-emerald-100 text-emerald-800';
+                },
+                getStatusBadgeClass(status) {
+                    if (status === 'เสร็จสิ้น') return 'bg-emerald-100 text-emerald-700';
+                    if (status === 'กำลังดำเนินการ') return 'bg-blue-100 text-blue-700';
+                    if (status === 'เกิน SLA') return 'bg-red-100 text-red-700';
+                    return 'bg-slate-100 text-slate-700';
+                },
+                formatDate(value) {
+                    if (!value) return '-';
+                    const d = new Date(value);
+                    if (isNaN(d)) return String(value);
+                    return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+                },
+                formatDateTime(value) {
+                    if (!value) return '-';
+                    const d = new Date(value);
+                    if (isNaN(d)) return String(value);
+                    return d.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                },
+
+                renderMainCharts() {
+                    const statusCounts = { 'รอดำเนินการ': 0, 'กำลังดำเนินการ': 0, 'เสร็จสิ้น': 0, 'เกิน SLA': 0 };
+                    this.dashboard.cmTickets.forEach(t => {
+                        const s = this.displayStatus(t);
+                        statusCounts[s] = (statusCounts[s] || 0) + 1;
+                    });
+
+                    if (this.charts.overall) this.charts.overall.destroy();
+                    this.charts.overall = new Chart(document.getElementById('overallChart'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(statusCounts),
+                            datasets: [{
+                                data: Object.values(statusCounts),
+                                backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444'],
+                            }],
+                        },
+                        options: { responsive: true, maintainAspectRatio: false },
+                    });
+
+                    const topSites = [...this.dashboard.installationSites]
+                        .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
+                        .slice(0, 10);
+
+                    if (this.charts.site) this.charts.site.destroy();
+                    this.charts.site = new Chart(document.getElementById('siteChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: topSites.map(s => (s.location || '').slice(0, 20)),
+                            datasets: [{ label: 'จำนวนชุดอุปกรณ์', data: topSites.map(s => s.quantity), backgroundColor: '#8b5cf6' }],
+                        },
+                        options: { responsive: true, maintainAspectRatio: false },
+                    });
+                },
+
+                renderTrendChart() {
+                    const canvas = document.getElementById('trendChart');
+                    if (!canvas) return;
+                    if (this.charts.trend) this.charts.trend.destroy();
+                    this.charts.trend = new Chart(canvas, {
+                        type: 'line',
+                        data: {
+                            labels: this.trend.map(t => t.periodLabel),
+                            datasets: [
+                                { label: 'จำนวนอุปกรณ์รวม', data: this.trend.map(t => t.totalQuantity), borderColor: '#8b5cf6', tension: 0.3 },
+                                { label: '% PM เฉลี่ย', data: this.trend.map(t => t.avgPmPercent), borderColor: '#10b981', tension: 0.3 },
+                            ],
+                        },
+                        options: { responsive: true, maintainAspectRatio: false },
+                    });
+                },
+            },
+            watch: {
+                showTrend(val) {
+                    if (val) this.loadTrend();
+                },
+            },
+        }).mount('#app');
+    </script>
+</body>
+</html>
