@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motorola P25 Maintenance Dashboard - PEA C1</title>
+    <title>Maintenance Dashboard - PEA C1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -18,7 +18,7 @@
             <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
                 <div class="text-center mb-6">
                     <i class="fa-solid fa-tower-cell text-3xl text-purple-700"></i>
-                    <h1 class="font-bold text-slate-800 mt-2">P25 Maintenance Dashboard</h1>
+                    <h1 class="font-bold text-slate-800 mt-2">Maintenance Dashboard</h1>
                     <p class="text-xs text-slate-500">กฟภ. ภาคกลาง เขต 1 (กฟก.1)</p>
                 </div>
                 <div class="space-y-3">
@@ -45,7 +45,7 @@
                 <div class="flex items-center space-x-3">
                     <i class="fa-solid font-bold text-2xl fa-tower-cell text-amber-400"></i>
                     <div>
-                        <h1 class="text-lg font-bold leading-tight">ระบบติดตามงานซ่อมบำรุงวิทยุสื่อสาร Motorola P25</h1>
+                        <h1 class="text-lg font-bold leading-tight">ระบบติดตามงานซ่อมบำรุงวิทยุสื่อสาร</h1>
                         <p class="text-xs text-purple-200">กฟภ. ภาคกลาง เขต 1 (กฟก.1)</p>
                     </div>
                 </div>
@@ -328,7 +328,7 @@
         const { createApp } = Vue;
 
         // TODO: วาง Web App URL ที่ได้จากการ Deploy Google Apps Script ตรงนี้
-        const API_URL = 'https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxxUCQk03kQGuj24D5dDrvoJjKhCWcwVpFByd73BYYtuIuzjaI668gU7gYTfRSjlTRa/exec';
         const TOKEN_STORAGE_KEY = 'p25_dashboard_session';
 
         createApp({
