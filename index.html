@@ -167,6 +167,7 @@
                     <div class="relative h-64">
                         <canvas id="overallChart"></canvas>
                     </div>
+                    <div v-if="!donutHasData" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูลงาน PM/CM สำหรับรอบนี้ (ถ้ามั่นใจว่ามีข้อมูล ให้ตรวจหัวคอลัมน์ชีท CMTickets)</div>
                 </div>
                 <div class="md:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -416,13 +417,29 @@
                             <label class="text-xs font-bold text-slate-500">Ticket ID</label>
                             <input v-model="addCmForm.ticketId" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
-                        <div>
+                        <div class="relative">
                             <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
-                            <input v-model="addCmForm.site" type="text" list="siteNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="addCmForm.site" type="text" autocomplete="off"
+                                   @focus="addCmForm.siteSuggestOpen = true" @blur="addCmForm.siteSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="addCmForm.siteSuggestOpen && matchSuggestions(siteNameOptions, addCmForm.site).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(siteNameOptions, addCmForm.site)" :key="opt"
+                                        @mousedown.prevent="addCmForm.site = opt; addCmForm.siteSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
                         </div>
-                        <div>
+                        <div class="relative">
                             <label class="text-xs font-bold text-slate-500">จังหวัด</label>
-                            <input v-model="addCmForm.province" type="text" list="provinceNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="addCmForm.province" type="text" autocomplete="off"
+                                   @focus="addCmForm.provinceSuggestOpen = true" @blur="addCmForm.provinceSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="addCmForm.provinceSuggestOpen && matchSuggestions(provinceOptions, addCmForm.province).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(provinceOptions, addCmForm.province)" :key="opt"
+                                        @mousedown.prevent="addCmForm.province = opt; addCmForm.provinceSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
@@ -458,13 +475,29 @@
                         <button @click="closeEditSiteModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
                     </div>
                     <div class="p-4 text-sm space-y-3">
-                        <div>
+                        <div class="relative">
                             <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
-                            <input v-model="editSiteForm.location" type="text" list="siteNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="editSiteForm.location" type="text" autocomplete="off"
+                                   @focus="editSiteForm.locationSuggestOpen = true" @blur="editSiteForm.locationSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="editSiteForm.locationSuggestOpen && matchSuggestions(siteNameOptions, editSiteForm.location).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(siteNameOptions, editSiteForm.location)" :key="opt"
+                                        @mousedown.prevent="editSiteForm.location = opt; editSiteForm.locationSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
                         </div>
-                        <div>
+                        <div class="relative">
                             <label class="text-xs font-bold text-slate-500">จังหวัด</label>
-                            <input v-model="editSiteForm.province" type="text" list="provinceNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="editSiteForm.province" type="text" autocomplete="off"
+                                   @focus="editSiteForm.provinceSuggestOpen = true" @blur="editSiteForm.provinceSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="editSiteForm.provinceSuggestOpen && matchSuggestions(provinceOptions, editSiteForm.province).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(provinceOptions, editSiteForm.province)" :key="opt"
+                                        @mousedown.prevent="editSiteForm.province = opt; editSiteForm.provinceSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
                         </div>
                         <p v-if="editSiteForm.error" class="text-xs text-red-600">{{ editSiteForm.error }}</p>
                         <button @click="submitEditSite" :disabled="editSiteForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
@@ -473,14 +506,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Shared autocomplete option lists for the modals above (native <datalist> — no extra library needed) -->
-            <datalist id="siteNameList">
-                <option v-for="name in siteNameOptions" :key="name" :value="name"></option>
-            </datalist>
-            <datalist id="provinceNameList">
-                <option v-for="p in provinceOptions" :key="p" :value="p"></option>
-            </datalist>
 
             <!-- ==================== USER MANAGEMENT VIEW (Admin only) ==================== -->
             <template v-if="currentView === 'users' && session.role === 'admin'">
@@ -648,10 +673,10 @@
                     showTicketModal: false,
 
                     showAddCmModal: false,
-                    addCmForm: { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '' },
+                    addCmForm: { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '', siteSuggestOpen: false, provinceSuggestOpen: false },
 
                     showEditSiteModal: false,
-                    editSiteForm: { no: null, location: '', province: '', saving: false, error: '' },
+                    editSiteForm: { no: null, location: '', province: '', saving: false, error: '', locationSuggestOpen: false, provinceSuggestOpen: false },
                 };
             },
             computed: {
@@ -675,9 +700,14 @@
                 provinceOptions() {
                     return this.provinceStats.byProvince.map(p => p.province).sort();
                 },
+                donutHasData() {
+                    const cmCount = (this.dashboard.cmTickets || []).length;
+                    const pmTotal = (this.dashboard.pmStatus || []).reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+                    return cmCount > 0 || pmTotal > 0;
+                },
                 siteNameOptions() {
                     // Known site names for this round, used as autocomplete suggestions
-                    // (list="siteNameList") on the "สถานที่ติดตั้งอุปกรณ์" fields.
+                    // on the "สถานที่ติดตั้งอุปกรณ์" fields.
                     const set = new Set(this.dashboard.installationSites.map(s => s.location).filter(Boolean));
                     return Array.from(set).sort();
                 },
@@ -1073,7 +1103,7 @@
 
                 /** ข้อ 3: เพิ่มใบงาน CM ด้วยมือ (admin) — ไม่บังคับกรอกครบทุกช่อง เขียนตรงลงชีท CMTickets ของรอบที่เลือกอยู่ */
                 openAddCmModal() {
-                    this.addCmForm = { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '' };
+                    this.addCmForm = { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '', siteSuggestOpen: false, provinceSuggestOpen: false };
                     this.showAddCmModal = true;
                 },
                 closeAddCmModal() {
@@ -1108,7 +1138,7 @@
 
                 /** ข้อ 4: แก้ไข สถานที่ติดตั้ง/จังหวัด ของแถวในตาราง InstallationSites (admin) — เขียนตรงลงชีท InstallationSites_Snapshot */
                 openEditSiteModal(item) {
-                    this.editSiteForm = { no: item.no, location: item.location, province: item.province || '', saving: false, error: '' };
+                    this.editSiteForm = { no: item.no, location: item.location, province: item.province || '', saving: false, error: '', locationSuggestOpen: false, provinceSuggestOpen: false };
                     this.showEditSiteModal = true;
                 },
                 closeEditSiteModal() {
@@ -1285,6 +1315,13 @@
                 resetDonut() {
                     this.donutFilter = 'all';
                     this.renderOverallChart();
+                },
+
+                /** Simple "contains" filter behind the custom autocomplete dropdowns (site name / province fields). */
+                matchSuggestions(list, query) {
+                    const q = String(query || '').trim().toLowerCase();
+                    if (!q) return list.slice(0, 8);
+                    return list.filter(item => item.toLowerCase().includes(q)).slice(0, 8);
                 },
 
                 /** ข้อ 4/5: ย่อชื่อสถานที่ให้สั้นลงสำหรับแสดงบนแกนกราฟ (เป็น best-effort — ชื่อที่ไม่เข้ารูปแบบที่รู้จักจะคงไว้ตามเดิม) */
