@@ -164,8 +164,7 @@
                         </h2>
                         <button v-if="donutFilter !== 'all'" @click="resetDonut" class="text-[11px] text-purple-600 hover:underline">&larr; ดูทั้งหมด</button>
                     </div>
-                    <p class="text-[11px] text-slate-400 mb-2">คลิกส่วนของกราฟเพื่อดูรายละเอียด — จะกรองกราฟด้านขวาให้อัตโนมัติ</p>
-                    <div class="relative h-48">
+                    <div class="relative h-64">
                         <canvas id="overallChart"></canvas>
                     </div>
                 </div>
@@ -189,7 +188,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="relative h-48">
+                    <div class="relative h-64">
                         <canvas id="siteChart"></canvas>
                     </div>
                     <div v-if="provinceStats.bySite.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูลจังหวัด/สถานที่สำหรับรอบนี้ (มีเฉพาะรอบที่นำเข้าจากไฟล์รายงาน ReportWorkOrderStatus)</div>
@@ -206,6 +205,9 @@
                             </h2>
                         </div>
                         <div class="flex gap-2">
+                            <button v-if="session.role === 'admin'" @click="openAddCmModal" class="text-xs px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium">
+                                <i class="fa-solid fa-plus mr-1"></i> เพิ่มรายการ
+                            </button>
                             <select v-model="cmStatusFilter" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
                                 <option value="">ทุกสถานะ</option>
                                 <option value="เกิน SLA">เกิน SLA</option>
@@ -239,13 +241,14 @@
                                 <td class="p-3 font-mono font-bold text-purple-700">
                                     <button @click="openTicketDetail(item)" class="underline decoration-dotted hover:text-purple-900">{{ item.ticketId }}</button>
                                 </td>
-                                <td class="p-3"><span class="font-semibold block">{{ item.site }}</span><span class="text-xs text-slate-400">{{ item.province }}</span></td>
-                                <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system }}</span></td>
-                                <td class="p-3 text-xs text-slate-500">{{ formatDateTime(item.reportedAt) }}</td>
+                                <td class="p-3"><span class="font-semibold block">{{ item.site || '-' }}</span><span class="text-xs text-slate-400">{{ item.province || '-' }}</span></td>
+                                <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system || '-' }}</span></td>
+                                <td class="p-3 text-xs text-slate-500">{{ item.reportedAt ? formatDateTime(item.reportedAt) : '-' }}</td>
                                 <td class="p-3">
-                                    <span :class="getSlaBadgeClass(item)" class="px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center">
+                                    <span v-if="item.slaDeadline || item.status === 'เสร็จสิ้น'" :class="getSlaBadgeClass(item)" class="px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center">
                                         <i class="fa-regular fa-clock mr-1"></i> {{ formatSlaTime(item) }}
                                     </span>
+                                    <span v-else class="text-slate-400 text-xs">-</span>
                                 </td>
                                 <td class="p-3">
                                     <select v-if="session.role === 'admin'" v-model="item.status" @change="updateStatus(item)"
@@ -287,16 +290,24 @@
                             <tr>
                                 <th class="p-2.5 text-center w-12">ลำดับ</th>
                                 <th class="p-2.5">สถานที่ติดตั้งอุปกรณ์</th>
+                                <th class="p-2.5">จังหวัด</th>
                                 <th class="p-2.5">อุปกรณ์ที่ติดตั้ง</th>
                                 <th class="p-2.5 text-center w-24">จำนวน (ชุด)</th>
+                                <th v-if="session.role === 'admin'" class="p-2.5 text-center w-10"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <tr v-for="item in filteredInstallationSites" :key="item.no" class="hover:bg-slate-50">
                                 <td class="p-2.5 text-center font-bold text-slate-400">{{ item.no }}</td>
-                                <td class="p-2.5 font-medium text-slate-800">{{ item.location }}</td>
+                                <td class="p-2.5 font-medium text-slate-800">{{ friendlySiteName(item.location) }}</td>
+                                <td class="p-2.5 text-slate-600">{{ item.province || '-' }}</td>
                                 <td class="p-2.5 text-slate-600"><span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100">{{ item.equipment }}</span></td>
                                 <td class="p-2.5 text-center font-bold text-slate-700">{{ item.quantity }}</td>
+                                <td v-if="session.role === 'admin'" class="p-2.5 text-center">
+                                    <button @click="openEditSiteModal(item)" title="แก้ไข" class="text-slate-300 hover:text-purple-600 transition">
+                                        <i class="fa-solid fa-gear"></i>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -389,6 +400,77 @@
                             <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">วันที่แจ้ง</dt><dd>{{ formatDateTime(ticketDetail.reportedAt) }}</dd></div>
                             <div class="flex justify-between"><dt class="text-slate-400">วันที่เสร็จสิ้น</dt><dd>{{ ticketDetail.completedAt ? formatDateTime(ticketDetail.completedAt) : '-' }}</dd></div>
                         </dl>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADD CM TICKET MODAL (admin only) -->
+            <div v-if="showAddCmModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="closeAddCmModal">
+                <div class="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[85vh] overflow-y-auto">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                        <h3 class="font-bold text-slate-800">เพิ่มรายการแจ้งซ่อม CM</h3>
+                        <button @click="closeAddCmModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
+                    </div>
+                    <div class="p-4 text-sm space-y-3">
+                        <p class="text-xs text-slate-400">กรอกเท่าที่มีข้อมูลได้เลย ช่องที่เว้นว่างจะแสดงเป็น "-" ในตาราง — บันทึกแล้วจะไปเพิ่มแถวใหม่ในชีท Google Sheets (CMTickets) ของรอบข้อมูลที่กำลังเลือกอยู่</p>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">Ticket ID (เว้นว่าง = สร้างให้อัตโนมัติ)</label>
+                            <input v-model="addCmForm.ticketId" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
+                            <input v-model="addCmForm.site" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">จังหวัด</label>
+                            <input v-model="addCmForm.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
+                            <input v-model="addCmForm.system" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">เวลาที่รับแจ้ง</label>
+                            <input v-model="addCmForm.reportedAt" type="datetime-local" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">สถานะ</label>
+                            <select v-model="addCmForm.status" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                <option value="รออนุมัติ">รออนุมัติ</option>
+                                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                <option value="งาน PM">งาน PM</option>
+                                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                            </select>
+                        </div>
+                        <p v-if="addCmForm.error" class="text-xs text-red-600">{{ addCmForm.error }}</p>
+                        <button @click="submitAddCmTicket" :disabled="addCmForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
+                            {{ addCmForm.saving ? 'กำลังบันทึก...' : 'บันทึก' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EDIT INSTALLATION SITE MODAL (admin only) -->
+            <div v-if="showEditSiteModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="closeEditSiteModal">
+                <div class="bg-white rounded-xl shadow-lg max-w-md w-full">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                        <h3 class="font-bold text-slate-800">แก้ไขสถานที่ติดตั้ง</h3>
+                        <button @click="closeEditSiteModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
+                    </div>
+                    <div class="p-4 text-sm space-y-3">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์ (ชื่อดิบ)</label>
+                            <input v-model="editSiteForm.location" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">จังหวัด</label>
+                            <input v-model="editSiteForm.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <p v-if="editSiteForm.error" class="text-xs text-red-600">{{ editSiteForm.error }}</p>
+                        <button @click="submitEditSite" :disabled="editSiteForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
+                            {{ editSiteForm.saving ? 'กำลังบันทึก...' : 'บันทึก' }}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -557,6 +639,12 @@
                     ticketDetail: null,
                     ticketDetailLoading: false,
                     showTicketModal: false,
+
+                    showAddCmModal: false,
+                    addCmForm: { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '' },
+
+                    showEditSiteModal: false,
+                    editSiteForm: { no: null, location: '', province: '', saving: false, error: '' },
                 };
             },
             computed: {
@@ -970,6 +1058,88 @@
                     this.ticketDetail = null;
                 },
 
+                /** ข้อ 3: เพิ่มใบงาน CM ด้วยมือ (admin) — ไม่บังคับกรอกครบทุกช่อง เขียนตรงลงชีท CMTickets ของรอบที่เลือกอยู่ */
+                openAddCmModal() {
+                    this.addCmForm = { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '' };
+                    this.showAddCmModal = true;
+                },
+                closeAddCmModal() {
+                    this.showAddCmModal = false;
+                },
+                async submitAddCmTicket() {
+                    const f = this.addCmForm;
+                    if (!this.currentImportId) {
+                        f.error = 'ยังไม่มีรอบข้อมูลให้ผูกรายการนี้ — นำเข้าข้อมูล Excel อย่างน้อย 1 รอบก่อน';
+                        return;
+                    }
+                    f.saving = true;
+                    f.error = '';
+                    try {
+                        await this.api('createCmTicket', {
+                            importId: this.currentImportId,
+                            ticketId: f.ticketId || undefined,
+                            site: f.site || undefined,
+                            province: f.province || undefined,
+                            system: f.system || undefined,
+                            reportedAt: f.reportedAt || undefined,
+                            status: f.status,
+                        });
+                        this.showAddCmModal = false;
+                        await this.loadDashboard(this.currentImportId);
+                    } catch (err) {
+                        f.error = err.message;
+                    } finally {
+                        f.saving = false;
+                    }
+                },
+
+                /** ข้อ 4: แก้ไข สถานที่ติดตั้ง/จังหวัด ของแถวในตาราง InstallationSites (admin) — เขียนตรงลงชีท InstallationSites_Snapshot */
+                openEditSiteModal(item) {
+                    this.editSiteForm = { no: item.no, location: item.location, province: item.province || '', saving: false, error: '' };
+                    this.showEditSiteModal = true;
+                },
+                closeEditSiteModal() {
+                    this.showEditSiteModal = false;
+                },
+                async submitEditSite() {
+                    const f = this.editSiteForm;
+                    f.saving = true;
+                    f.error = '';
+                    try {
+                        await this.api('updateInstallationSite', {
+                            importId: this.currentImportId,
+                            no: f.no,
+                            location: f.location,
+                            province: f.province,
+                        });
+                        this.showEditSiteModal = false;
+                        await this.loadDashboard(this.currentImportId);
+                    } catch (err) {
+                        f.error = err.message;
+                    } finally {
+                        f.saving = false;
+                    }
+                },
+
+                /**
+                 * ข้อ 4: ย่อ/แปลงชื่อสถานที่ให้อ่านง่ายขึ้นสำหรับแสดงในตาราง (best-effort ตามตัวอย่างที่ให้มา)
+                 * เช่น "สฟฟ.บ้านลาดทราย Base Station" -> "สถานีไฟฟ้า บ้านลาดทราย"
+                 *      "กฟก.1 อาคาร 3 ชั้น 2 Server Room MSO" -> "การไฟฟ้าส่วนภูมิภาค เขต 1 ภาคกลาง"
+                 *      "กฟอ.ธัญบุรี Base Station" -> "การไฟฟ้าส่วนภูมิภาคสาขาธัญบุรี"
+                 * หมายเหตุ: ชื่อดิบเดิมจากไฟล์ยังเก็บไว้ครบ (ใช้ในการค้นหา/ผูกข้อมูล) นี่แค่ทำ label แสดงผลเท่านั้น
+                 */
+                friendlySiteName(name) {
+                    const s = String(name || '').trim();
+                    if (!s) return '-';
+                    let m = s.match(/^กฟก\.\s*(\d+)/);
+                    if (m) return 'การไฟฟ้าส่วนภูมิภาค เขต ' + m[1] + ' ภาคกลาง';
+                    m = s.match(/^กฟอ\.\s*(\S+)/);
+                    if (m) return 'การไฟฟ้าส่วนภูมิภาคสาขา' + m[1];
+                    m = s.match(/^สฟฟ\.\s*(\S+)/);
+                    if (m) return 'สถานีไฟฟ้าส่วนภูมิภาค ' + m[1];
+                    return s;
+                },
+
                 displayStatus(item) {
                     if (item.status !== 'เสร็จสิ้น' && item.slaHoursLeft < 0) return 'เกิน SLA';
                     return item.status;
@@ -1184,7 +1354,9 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
+                            // ข้อ 2: intersect: true + mode: 'point' ทำให้ tooltip โชว์เฉพาะ dataset ที่ชี้ตรงๆ
+                            // (ชี้แท่งอุปกรณ์ -> เห็นแค่จำนวนอุปกรณ์ประเภทนั้น, ชี้แท่ง CM/PM -> เห็นแค่สถานะนั้น) แทนที่จะรวมทุกอย่างมาแสดงพร้อมกัน
+                            interaction: { mode: 'point', intersect: true },
                             scales: {
                                 x: { stacked: true, ticks: { maxRotation: 0, minRotation: 0, autoSkip: false, font: { size: 10 } } },
                                 y: { stacked: true, beginAtZero: true },
@@ -1194,17 +1366,24 @@
                                 tooltip: {
                                     callbacks: {
                                         title: (items) => {
+                                            if (!items.length) return '';
                                             const r = rows[items[0].dataIndex];
                                             return r.site ? r.site : r.province;
                                         },
+                                        label: (item) => {
+                                            const ds = item.dataset;
+                                            if (ds.stack === 'equipment') return 'จำนวนอุปกรณ์ (' + ds.label.replace(/^อุปกรณ์ - /, '') + '): ' + item.parsed.y;
+                                            return ds.label + ': ' + item.parsed.y;
+                                        },
                                         afterBody: (items) => {
-                                            const r = rows[items[0].dataIndex];
-                                            if (this.provinceViewMetric === 'pm' && r.pmRecords && r.pmRecords.length) {
-                                                return ['รอบ PM ที่ทำ:'].concat(
-                                                    r.pmRecords.slice(0, 6).map(p => '- ' + this.formatDate(p.reportedAt) + ' (' + p.status + ')')
-                                                );
-                                            }
-                                            return [];
+                                            if (!items.length) return [];
+                                            const item = items[0];
+                                            if (item.dataset.stack !== 'status' || this.provinceViewMetric !== 'pm') return [];
+                                            const r = rows[item.dataIndex];
+                                            if (!r.pmRecords || !r.pmRecords.length) return [];
+                                            return ['รอบ PM ที่ทำ:'].concat(
+                                                r.pmRecords.slice(0, 6).map(p => '- ' + this.formatDate(p.reportedAt) + ' (' + p.status + ')')
+                                            );
                                         },
                                     },
                                 },
