@@ -242,7 +242,7 @@
                                 <td class="p-3 font-mono font-bold text-purple-700">
                                     <button @click="openTicketDetail(item)" class="underline decoration-dotted hover:text-purple-900">{{ item.ticketId }}</button>
                                 </td>
-                                <td class="p-3"><span class="font-semibold block">{{ item.site || '-' }}</span><span class="text-xs text-slate-400">{{ item.province || '-' }}</span></td>
+                                <td class="p-3"><span class="font-semibold block">{{ friendlySiteName(item.site) }}</span><span class="text-xs text-slate-400">{{ item.province || '-' }}</span></td>
                                 <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system || '-' }}</span></td>
                                 <td class="p-3 text-xs text-slate-500">{{ item.reportedAt ? formatDateTime(item.reportedAt) : '-' }}</td>
                                 <td class="p-3">
