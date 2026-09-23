@@ -173,7 +173,6 @@
                             <h2 class="font-bold text-slate-800 flex items-center">
                                 <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
                             </h2>
-                            <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน) เว้นแต่ไฟล์ระบุ SLA เฉพาะรายการ — เรียงตามความเร่งด่วน เกิน SLA ขึ้นก่อนเสมอ</p>
                         </div>
                         <div class="flex gap-2">
                             <select v-model="cmStatusFilter" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
@@ -341,7 +340,6 @@
                                 <option :value="0">ทั้งหมด</option>
                             </select>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">ไฟล์ที่จัดเก็บไว้ใน Google Drive ตามช่วงเวลาที่เลือก</p>
 
                         <div class="space-y-2 max-h-64 overflow-y-auto">
                             <div v-for="report in reportFiles" :key="report.fileId" class="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded border border-slate-100 text-xs">
