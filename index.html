@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maintenance Dashboard - PEA C1</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -156,6 +156,9 @@
             </div>
 
             <!-- CHARTS -->
+            <div v-if="chartsError" class="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3">
+                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> วาดกราฟไม่สำเร็จ: {{ chartsError }}
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                     <div class="flex items-center justify-between mb-1">
@@ -209,6 +212,10 @@
                             <button v-if="session.role === 'admin'" @click="openAddCmModal" class="text-xs px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium">
                                 <i class="fa-solid fa-plus mr-1"></i> เพิ่มรายการ
                             </button>
+                            <a v-if="session.role === 'admin' && sheetLinks && sheetLinks.cmTickets" :href="sheetLinks.cmTickets" target="_blank" rel="noopener"
+                               title="เปิดชีท CMTickets ใน Google Sheet" class="text-xs px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-600 font-medium inline-flex items-center">
+                                <i class="fa-solid fa-table-cells mr-1.5 text-emerald-600"></i> เปิด Google Sheet
+                            </a>
                             <select v-model="cmStatusFilter" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
                                 <option value="">ทุกสถานะ</option>
                                 <option value="เกิน SLA">เกิน SLA</option>
@@ -235,6 +242,7 @@
                                 <th class="p-3">เวลาที่รับแจ้ง</th>
                                 <th class="p-3">SLA คงเหลือ</th>
                                 <th class="p-3">สถานะ</th>
+                                <th v-if="session.role === 'admin'" class="p-3 text-center w-10"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -264,9 +272,14 @@
                                         {{ displayStatus(item) }}
                                     </span>
                                 </td>
+                                <td v-if="session.role === 'admin'" class="p-3 text-center">
+                                    <button @click="openEditCmModal(item)" title="แก้ไขข้อมูลใบงานนี้" class="text-slate-300 hover:text-purple-600 transition">
+                                        <i class="fa-solid fa-gear"></i>
+                                    </button>
+                                </td>
                             </tr>
                             <tr v-if="sortedCmTickets.length === 0">
-                                <td colspan="6" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ตรงตามเงื่อนไขที่เลือก</td>
+                                <td colspan="7" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ตรงตามเงื่อนไขที่เลือก</td>
                             </tr>
                         </tbody>
                     </table>
@@ -507,6 +520,68 @@
                 </div>
             </div>
 
+            <!-- EDIT CM TICKET MODAL (admin only) -->
+            <div v-if="showEditCmModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="closeEditCmModal">
+                <div class="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[85vh] overflow-y-auto">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                        <h3 class="font-bold text-slate-800">แก้ไขใบงาน CM — {{ editCmForm.ticketId }}</h3>
+                        <button @click="closeEditCmModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
+                    </div>
+                    <div class="p-4 text-sm space-y-3">
+                        <div class="relative">
+                            <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
+                            <input v-model="editCmForm.site" type="text" autocomplete="off"
+                                   @focus="editCmForm.siteSuggestOpen = true" @blur="editCmForm.siteSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="editCmForm.siteSuggestOpen && matchSuggestions(siteNameOptions, editCmForm.site).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(siteNameOptions, editCmForm.site)" :key="opt"
+                                        @mousedown.prevent="editCmForm.site = opt; editCmForm.siteSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <label class="text-xs font-bold text-slate-500">จังหวัด</label>
+                            <input v-model="editCmForm.province" type="text" autocomplete="off"
+                                   @focus="editCmForm.provinceSuggestOpen = true" @blur="editCmForm.provinceSuggestOpen = false"
+                                   class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <div v-if="editCmForm.provinceSuggestOpen && matchSuggestions(provinceOptions, editCmForm.province).length"
+                                 class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <button type="button" v-for="opt in matchSuggestions(provinceOptions, editCmForm.province)" :key="opt"
+                                        @mousedown.prevent="editCmForm.province = opt; editCmForm.provinceSuggestOpen = false"
+                                        class="block w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-purple-50 hover:text-purple-700">{{ opt }}</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
+                            <input v-model="editCmForm.system" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">เวลาที่รับแจ้ง</label>
+                            <input v-model="editCmForm.reportedAt" type="datetime-local" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">สถานะ</label>
+                            <select v-model="editCmForm.status" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                <option value="รออนุมัติ">รออนุมัติ</option>
+                                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                <option value="งาน PM">งาน PM</option>
+                                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                            </select>
+                        </div>
+                        <p v-if="editCmForm.error" class="text-xs text-red-600">{{ editCmForm.error }}</p>
+                        <button @click="submitEditCmTicket" :disabled="editCmForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
+                            {{ editCmForm.saving ? 'กำลังบันทึก...' : 'บันทึก' }}
+                        </button>
+                        <a v-if="sheetLinks && sheetLinks.cmTickets" :href="sheetLinks.cmTickets" target="_blank" rel="noopener"
+                           class="block text-center text-xs text-purple-600 hover:underline pt-1">
+                            <i class="fa-solid fa-up-right-from-square mr-1"></i> หรือแก้ไขแถวนี้โดยตรงใน Google Sheet
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <!-- ==================== USER MANAGEMENT VIEW (Admin only) ==================== -->
             <template v-if="currentView === 'users' && session.role === 'admin'">
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
@@ -667,6 +742,7 @@
                     userImport: { dragOver: false, importing: false, error: '', result: null },
 
                     charts: { overall: null, site: null, trend: null },
+                    chartsError: '', // ข้อความ error ที่จับได้จากการวาดกราฟ (โชว์ในหน้าเว็บ แทนที่จะเงียบแล้วปล่อยกราฟว่าง)
 
                     ticketDetail: null,
                     ticketDetailLoading: false,
@@ -677,6 +753,11 @@
 
                     showEditSiteModal: false,
                     editSiteForm: { no: null, location: '', province: '', saving: false, error: '', locationSuggestOpen: false, provinceSuggestOpen: false },
+
+                    showEditCmModal: false,
+                    editCmForm: { ticketId: '', site: '', province: '', system: '', reportedAt: '', status: 'รอดำเนินการ', saving: false, error: '', siteSuggestOpen: false, provinceSuggestOpen: false },
+                    // ลิงก์เปิด Google Sheet ตรง (เฉพาะ admin) — มาจาก bootstrap()/getSheetLinks()
+                    sheetLinks: null,
                 };
             },
             computed: {
@@ -790,11 +871,12 @@
                 },
 
                 /**
-                 * Parses a fetch Response as JSON, but fails with a clear Thai
-                 * message when the server actually returned an HTML page
-                 * (e.g. Apps Script showing an error/login page instead of
-                 * JSON) — this is what causes the raw
-                 * "Unexpected token '<' ... is not valid JSON" browser error.
+                 * Parses a fetch Response as JSON. When the server didn't return valid JSON,
+                 * inspects the raw text to figure out *why* instead of always blaming the
+                 * deploy permission — that used to be the only message shown here, which was
+                 * misleading whenever the real cause was something else (e.g. Apps Script kept
+                 * running and actually saved the change, but the HTTP response itself timed out
+                 * on the way back — refreshing then shows the change went through after all).
                  */
                 async parseJsonResponse(res) {
                     const text = await res.text();
@@ -804,18 +886,35 @@
                         if (API_URL.includes('XXXXXXXX')) {
                             throw new Error('ยังไม่ได้ตั้งค่า API_URL — กรุณานำ Web App URL ของ Google Apps Script มาใส่ในโค้ด (ตัวแปร API_URL)');
                         }
-                        throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (เซิร์ฟเวอร์ไม่ได้ตอบกลับเป็น JSON) กรุณาตรวจสอบว่า Deploy Google Apps Script เป็น Web App และตั้งสิทธิ์การเข้าถึงเป็น "Anyone" แล้ว');
+                        // Google ส่งหน้า HTML "ขอ sign in" กลับมาแทน JSON จริงๆ เฉพาะกรณีสิทธิ์ deploy ผิด
+                        if (/accounts\.google\.com|ServiceLogin|isn't verified|ไม่ได้รับอนุญาต/i.test(text)) {
+                            throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — ดูเหมือน Deploy Google Apps Script ยังตั้งสิทธิ์การเข้าถึงไม่ใช่ "Anyone" (Google ส่งหน้าล็อกอินกลับมาแทนข้อมูล) กรุณาตรวจสอบใน Deploy > Manage deployments อีกครั้ง');
+                        }
+                        // Response ว่างเปล่า/ขาดกลางทาง — มักเกิดจาก Apps Script รันช้ากว่าที่ browser รอไหว
+                        // (เช่น ชีทมีแถวเยอะ) ตัวฟังก์ชันบน server ส่วนใหญ่จะรันจนจบอยู่ดีและบันทึกสำเร็จ
+                        // แม้ response จะมาไม่ทัน — ไม่ใช่ปัญหาสิทธิ์ deploy เลย
+                        if (!text || text.trim().length === 0) {
+                            throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ทัน (การเชื่อมต่อหลุดระหว่างรอผล) — ปกติแล้ว Apps Script จะรันจนจบและบันทึกข้อมูลสำเร็จอยู่ดี กรุณา "รีเฟรชหน้าเว็บ" เพื่อตรวจสอบก่อนว่าข้อมูลบันทึกไปแล้วหรือยัง แล้วค่อยลองทำซ้ำถ้ายังไม่ขึ้น (เพื่อไม่ให้บันทึกซ้ำซ้อน)');
+                        }
+                        // เหลือกรณีอื่นที่ไม่รู้จักแน่ชัด — ไม่ฟันธงว่าเป็นเรื่องสิทธิ์ deploy อีกต่อไป
+                        throw new Error('เซิร์ฟเวอร์ตอบกลับมาในรูปแบบที่ไม่คาดคิด (ไม่ใช่ JSON) กรุณารีเฟรชหน้าเว็บเพื่อตรวจสอบว่าข้อมูลบันทึกไปแล้วหรือไม่ ก่อนลองใหม่ ถ้ายังเจอซ้ำๆ ให้ตรวจ Deploy > Manage deployments ว่าเวอร์ชันที่ deploy อยู่เป็นเวอร์ชันล่าสุดของโค้ดหรือยัง (แก้โค้ดแล้วต้องกด "New version" ทุกครั้ง ไม่ใช่แค่ Save)');
                     }
                 },
 
                 /** Single bridge to the GAS Web App — mirrors the dispatch(action, params) convention */
                 async api(action, params) {
-                    const res = await fetch(API_URL, {
-                        method: 'POST',
-                        // text/plain avoids a CORS preflight against the Apps Script endpoint
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action, params: Object.assign({}, params, { token: this.session ? this.session.token : null }) }),
-                    });
+                    let res;
+                    try {
+                        res = await fetch(API_URL, {
+                            method: 'POST',
+                            // text/plain avoids a CORS preflight against the Apps Script endpoint
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action, params: Object.assign({}, params, { token: this.session ? this.session.token : null }) }),
+                        });
+                    } catch (networkErr) {
+                        // fetch() เองล้มเหลว (เน็ตหลุด/CORS/DNS) — คนละกรณีกับสิทธิ์ deploy ผิด
+                        throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (เครือข่ายขัดข้องหรือเรียก API ไม่ถึง): ' + networkErr.message);
+                    }
                     const json = await this.parseJsonResponse(res);
                     if (!json.ok) {
                         if (/เข้าสู่ระบบ|เซสชันหมดอายุ/.test(json.error || '')) {
@@ -854,6 +953,7 @@
                                 username: u.username, displayName: u.displayName, role: u.role,
                                 password: '', saving: false, error: '',
                             }));
+                            this.sheetLinks = data.sheetLinks || null;
                         }
                         this.$nextTick(() => this.renderMainCharts());
                     } catch (err) {
@@ -867,7 +967,10 @@
                         try {
                             await this.loadImportHistory();
                             await this.loadReportFiles();
-                            if (this.session.role === 'admin') await this.loadUsers();
+                            if (this.session.role === 'admin') {
+                                await this.loadUsers();
+                                try { this.sheetLinks = await this.api('getSheetLinks'); } catch (e2) { /* non-critical */ }
+                            }
                         } catch (fallbackErr) {
                             this.apiError = fallbackErr.message;
                         }
@@ -1164,6 +1267,53 @@
                     }
                 },
 
+                /** แปลงค่าวันที่ (จากชีท/API) ให้เป็นสตริงที่ input type="datetime-local" รับได้ (YYYY-MM-DDTHH:mm ตามเวลาท้องถิ่น) */
+                toDateTimeLocalValue(value) {
+                    if (!value) return '';
+                    const d = new Date(value);
+                    if (isNaN(d)) return '';
+                    const pad = n => String(n).padStart(2, '0');
+                    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                },
+
+                /** ปุ่มฟันเฟือง (แก้ไข) ในตาราง "รายการแจ้งซ่อม CM" — แก้ไขข้อมูลเต็มของใบงานนั้น เขียนตรงลงชีท CMTickets */
+                openEditCmModal(item) {
+                    this.editCmForm = {
+                        ticketId: item.ticketId,
+                        site: item.site || '',
+                        province: item.province || '',
+                        system: item.system || '',
+                        reportedAt: this.toDateTimeLocalValue(item.reportedAt),
+                        status: item.status || 'รอดำเนินการ',
+                        saving: false, error: '', siteSuggestOpen: false, provinceSuggestOpen: false,
+                    };
+                    this.showEditCmModal = true;
+                },
+                closeEditCmModal() {
+                    this.showEditCmModal = false;
+                },
+                async submitEditCmTicket() {
+                    const f = this.editCmForm;
+                    f.saving = true;
+                    f.error = '';
+                    try {
+                        await this.api('updateCmTicket', {
+                            ticketId: f.ticketId,
+                            site: f.site,
+                            province: f.province,
+                            system: f.system,
+                            reportedAt: f.reportedAt || undefined,
+                            status: f.status,
+                        });
+                        this.showEditCmModal = false;
+                        await this.loadDashboard(this.currentImportId);
+                    } catch (err) {
+                        f.error = err.message;
+                    } finally {
+                        f.saving = false;
+                    }
+                },
+
                 /**
                  * ข้อ 4: ย่อ/แปลงชื่อสถานที่ให้อ่านง่ายขึ้นสำหรับแสดงในตาราง (best-effort ตามตัวอย่างที่ให้มา)
                  * เช่น "สฟฟ.บ้านลาดทราย Base Station" -> "สถานีไฟฟ้า บ้านลาดทราย"
@@ -1228,8 +1378,20 @@
                 },
 
                 renderMainCharts() {
-                    this.renderOverallChart();
-                    this.renderProvinceChart();
+                    // เดิมถ้า Chart.js โหลดไม่สำเร็จ (เช่นโดนไฟร์วอลล์ขององค์กรบล็อก cdn.jsdelivr.net)
+                    // หรือ renderOverallChart/renderProvinceChart โยน error ใดๆ กราฟจะค้างว่างเปล่าแบบเงียบๆ
+                    // ไม่มีทางรู้ได้จากหน้าเว็บเลยว่าเกิดอะไรขึ้น — ตอนนี้จับ error แล้วโชว์ข้อความให้เห็นแทน
+                    this.chartsError = '';
+                    try {
+                        if (typeof Chart === 'undefined') {
+                            throw new Error('โหลดไลบรารี Chart.js ไม่สำเร็จ (สคริปต์จาก cdn.jsdelivr.net อาจถูกไฟร์วอลล์/พร็อกซีขององค์กรบล็อกอยู่ — ลองเปิดหน้านี้จากเครือข่ายอื่น หรือแจ้งฝ่าย IT ให้ปลดบล็อกโดเมนนี้)');
+                        }
+                        this.renderOverallChart();
+                        this.renderProvinceChart();
+                    } catch (err) {
+                        this.chartsError = err.message;
+                        console.error('renderMainCharts failed:', err);
+                    }
                 },
 
                 /** CM tickets grouped into the 3 severity buckets used by the donut + province chart. */
