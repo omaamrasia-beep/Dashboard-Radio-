@@ -711,6 +711,7 @@
                     try {
                         this.apiError = '';
                         const data = await this.api('bootstrap', { reportRangeMonths: this.reportRange });
+                        if (!data) throw new Error('BOOTSTRAP_EMPTY_RESPONSE');
                         this.importHistory = data.importHistory || [];
                         if (this.importHistory.length > 0) this.currentImportId = this.importHistory[0].importId;
                         this.dashboard = Object.assign({ equipmentFailureSummary: [], staffSummary: [] }, data.dashboard);
@@ -725,7 +726,20 @@
                         }
                         this.$nextTick(() => this.renderMainCharts());
                     } catch (err) {
-                        this.apiError = err.message;
+                        // Most likely cause: the frontend was updated but the Apps Script
+                        // backend hasn't been re-deployed with the 'bootstrap' action yet
+                        // (dispatch() there still throws "ไม่รู้จัก action" for it, or an
+                        // even older deployment returns something unexpected). Rather than
+                        // show an error, fall back to the old sequence of separate calls so
+                        // the dashboard still works — once the backend IS redeployed, the
+                        // fast path above just starts succeeding on its own, no other change needed.
+                        try {
+                            await this.loadImportHistory();
+                            await this.loadReportFiles();
+                            if (this.session.role === 'admin') await this.loadUsers();
+                        } catch (fallbackErr) {
+                            this.apiError = fallbackErr.message;
+                        }
                     } finally {
                         clearTimeout(timer);
                         this.initialLoading = false;
