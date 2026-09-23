@@ -89,6 +89,11 @@
             <!-- ==================== DASHBOARD VIEW ==================== -->
             <template v-if="currentView === 'dashboard'">
 
+            <!-- SLA OVERDUE BANNER -->
+            <div v-if="overdueCmCount > 0" class="bg-red-600 text-white text-sm font-bold p-3 rounded-lg">
+                มีงาน CM เกิน SLA อยู่ {{ overdueCmCount }} รายการ — กรุณาตรวจสอบด่วน
+            </div>
+
             <!-- IMPORT / HISTORY TOOLBAR -->
             <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center gap-3 justify-between">
                 <div class="flex items-center gap-2">
@@ -163,10 +168,29 @@
             <!-- CM WORK ORDERS -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 border-b border-slate-100 bg-slate-50">
-                    <h2 class="font-bold text-slate-800 flex items-center">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
-                    </h2>
-                    <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน) — รายการใหม่มาจากไฟล์ Excel ที่นำเข้าในแต่ละรอบ</p>
+                    <div class="flex flex-wrap justify-between items-start gap-3">
+                        <div>
+                            <h2 class="font-bold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> รายการแจ้งซ่อม CM (Corrective Maintenance)
+                            </h2>
+                            <p class="text-xs text-slate-500">ข้อกำหนด SLA: ต้องดำเนินการแก้ไขเสร็จสิ้นภายใน 24 ชั่วโมง (1 วัน) เว้นแต่ไฟล์ระบุ SLA เฉพาะรายการ — เรียงตามความเร่งด่วน เกิน SLA ขึ้นก่อนเสมอ</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <select v-model="cmStatusFilter" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
+                                <option value="">ทุกสถานะ</option>
+                                <option value="เกิน SLA">เกิน SLA</option>
+                                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                <option value="รออนุมัติ">รออนุมัติ</option>
+                                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                <option value="งาน PM">งาน PM</option>
+                                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                            </select>
+                            <select v-model="cmProvinceFilter" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
+                                <option value="">ทุกจังหวัด</option>
+                                <option v-for="p in cmProvinceOptions" :key="p" :value="p">{{ p }}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-sm">
@@ -181,8 +205,10 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="item in dashboard.cmTickets" :key="item.ticketId" class="hover:bg-slate-50">
-                                <td class="p-3 font-mono font-bold text-purple-700">{{ item.ticketId }}</td>
+                            <tr v-for="item in sortedCmTickets" :key="item.ticketId" class="hover:bg-slate-50">
+                                <td class="p-3 font-mono font-bold text-purple-700">
+                                    <button @click="openTicketDetail(item)" class="underline decoration-dotted hover:text-purple-900">{{ item.ticketId }}</button>
+                                </td>
                                 <td class="p-3"><span class="font-semibold block">{{ item.site }}</span><span class="text-xs text-slate-400">{{ item.province }}</span></td>
                                 <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system }}</span></td>
                                 <td class="p-3 text-xs text-slate-500">{{ formatDateTime(item.reportedAt) }}</td>
@@ -195,7 +221,9 @@
                                     <select v-if="session.role === 'admin'" v-model="item.status" @change="updateStatus(item)"
                                             :class="getStatusBadgeClass(displayStatus(item))" class="text-xs px-2 py-1 rounded font-medium border-0 focus:outline-none">
                                         <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                        <option value="รออนุมัติ">รออนุมัติ</option>
                                         <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                        <option value="งาน PM">งาน PM</option>
                                         <option value="เสร็จสิ้น">เสร็จสิ้น</option>
                                     </select>
                                     <span v-else :class="getStatusBadgeClass(displayStatus(item))" class="text-xs px-2 py-0.5 rounded font-medium">
@@ -203,8 +231,8 @@
                                     </span>
                                 </td>
                             </tr>
-                            <tr v-if="dashboard.cmTickets.length === 0">
-                                <td colspan="6" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ในรอบนี้</td>
+                            <tr v-if="sortedCmTickets.length === 0">
+                                <td colspan="6" class="p-6 text-center text-sm text-slate-400">ไม่มีใบงาน CM ตรงตามเงื่อนไขที่เลือก</td>
                             </tr>
                         </tbody>
                     </table>
@@ -246,6 +274,36 @@
                 </div>
             </div>
 
+            <!-- EQUIPMENT FAILURE SUMMARY & STAFF SUMMARY (from the raw work-order report, if this round has one) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-slate-800 mb-1">อุปกรณ์ที่พบปัญหาบ่อย (ตามประเภท)</h2>
+                    <p class="text-xs text-slate-500 mb-3">นับจากใบงาน CM ของรอบนี้ แยกตามประเภทอุปกรณ์ (BTS / MSO / DPC ฯลฯ)</p>
+                    <div class="space-y-2">
+                        <div v-for="e in dashboard.equipmentFailureSummary" :key="e.type" class="text-xs">
+                            <div class="flex justify-between mb-1"><span class="font-semibold text-slate-700">{{ e.type }}</span><span class="text-slate-500">{{ e.count }} ครั้ง</span></div>
+                            <div class="w-full bg-slate-100 rounded-full h-2">
+                                <div class="bg-amber-500 h-2 rounded-full" :style="{ width: (e.count / (dashboard.equipmentFailureSummary[0].count || 1) * 100) + '%' }"></div>
+                            </div>
+                        </div>
+                        <div v-if="dashboard.equipmentFailureSummary.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูล (รอบนี้นำเข้าด้วย template แบบเดิม)</div>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-slate-800 mb-1">สรุปงานที่ปิดต่อช่าง</h2>
+                    <p class="text-xs text-slate-500 mb-3">นับงานที่มีสถานะ "เสร็จสิ้น" ของรอบนี้ ต่อรายชื่อช่างที่ระบุในใบงาน</p>
+                    <div class="space-y-2">
+                        <div v-for="s in dashboard.staffSummary" :key="s.staff" class="text-xs">
+                            <div class="flex justify-between mb-1"><span class="font-semibold text-slate-700">{{ s.staff }}</span><span class="text-slate-500">{{ s.count }} งาน</span></div>
+                            <div class="w-full bg-slate-100 rounded-full h-2">
+                                <div class="bg-emerald-500 h-2 rounded-full" :style="{ width: (s.count / (dashboard.staffSummary[0].count || 1) * 100) + '%' }"></div>
+                            </div>
+                        </div>
+                        <div v-if="dashboard.staffSummary.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูล (รอบนี้นำเข้าด้วย template แบบเดิม)</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- PM STATUS & REPORT LIBRARY -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
@@ -275,7 +333,7 @@
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <h2 class="font-bold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-cloud-arrow-down text-blue-600 mr-2"></i> คลังรายงาน PM/CM
+                                <i class="fa-solid fa-cloud-arrow-down text-blue-600 mr-2"></i> รายงานการซ่อมบำรุง
                             </h2>
                             <select v-model.number="reportRange" @change="loadReportFiles" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
                                 <option :value="1">ย้อนหลัง 1 เดือน</option>
@@ -309,6 +367,37 @@
 
             </template>
             <!-- ==================== END DASHBOARD VIEW ==================== -->
+
+            <!-- TICKET DETAIL MODAL (shared across views) -->
+            <div v-if="showTicketModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="closeTicketModal">
+                <div class="bg-white rounded-xl shadow-lg max-w-lg w-full max-h-[85vh] overflow-y-auto">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                        <h3 class="font-bold text-slate-800">รายละเอียดใบงาน</h3>
+                        <button @click="closeTicketModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
+                    </div>
+                    <div class="p-4 text-sm">
+                        <div v-if="ticketDetailLoading" class="text-center text-slate-400 py-8">กำลังโหลด...</div>
+                        <div v-else-if="!ticketDetail" class="text-center text-slate-400 py-8">
+                            ไม่มีรายละเอียดเพิ่มเติมสำหรับใบงานนี้ (รอบนี้นำเข้าด้วย template แบบเดิม ซึ่งไม่มีข้อมูลสาเหตุ/วิธีแก้/ช่างเก็บไว้)
+                        </div>
+                        <dl v-else class="space-y-2.5">
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">ใบสั่งงาน</dt><dd class="font-bold font-mono">{{ ticketDetail.workOrderNo }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">เลขที่คำร้อง</dt><dd>{{ ticketDetail.requestNo || '-' }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">ประเภทงาน</dt><dd>{{ ticketDetail.jobType }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">สถานที่</dt><dd class="text-right">{{ ticketDetail.site }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">จังหวัด</dt><dd>{{ ticketDetail.province }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">รหัสอุปกรณ์</dt><dd class="font-mono">{{ ticketDetail.equipmentCode }}</dd></div>
+                            <div class="border-b border-slate-50 pb-2"><dt class="text-slate-400 mb-1">รายละเอียดการแจ้งซ่อม</dt><dd>{{ ticketDetail.faultDescription || '-' }}</dd></div>
+                            <div class="border-b border-slate-50 pb-2"><dt class="text-slate-400 mb-1">สาเหตุ</dt><dd>{{ ticketDetail.cause || '-' }}</dd></div>
+                            <div class="border-b border-slate-50 pb-2"><dt class="text-slate-400 mb-1">การแก้ไขปัญหา</dt><dd>{{ ticketDetail.solution || '-' }}</dd></div>
+                            <div v-if="ticketDetail.holdDetail" class="border-b border-slate-50 pb-2"><dt class="text-slate-400 mb-1">รายละเอียดการพัก/อื่นๆ</dt><dd>{{ ticketDetail.holdDetail }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">พนักงาน</dt><dd class="text-right">{{ ticketDetail.staff || '-' }}</dd></div>
+                            <div class="flex justify-between border-b border-slate-50 pb-2"><dt class="text-slate-400">วันที่แจ้ง</dt><dd>{{ formatDateTime(ticketDetail.reportedAt) }}</dd></div>
+                            <div class="flex justify-between"><dt class="text-slate-400">วันที่เสร็จสิ้น</dt><dd>{{ ticketDetail.completedAt ? formatDateTime(ticketDetail.completedAt) : '-' }}</dd></div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
 
             <!-- ==================== USER MANAGEMENT VIEW (Admin only) ==================== -->
             <template v-if="currentView === 'users' && session.role === 'admin'">
@@ -366,10 +455,12 @@
 
                     apiError: '',
                     searchQuery: '',
+                    cmStatusFilter: '',
+                    cmProvinceFilter: '',
 
                     importHistory: [],
                     currentImportId: null,
-                    dashboard: { sitesSummary: [], installationSites: [], pmStatus: [], cmTickets: [] },
+                    dashboard: { sitesSummary: [], installationSites: [], pmStatus: [], cmTickets: [], equipmentFailureSummary: [], staffSummary: [] },
                     trend: [],
                     showTrend: false,
                     importing: false,
@@ -381,6 +472,10 @@
                     newUserForm: { username: '', password: '', displayName: '', role: 'pea', saving: false, error: '' },
 
                     charts: { overall: null, site: null, trend: null },
+
+                    ticketDetail: null,
+                    ticketDetailLoading: false,
+                    showTicketModal: false,
                 };
             },
             computed: {
@@ -400,6 +495,27 @@
                 selectedImportExcelUrl() {
                     const found = this.importHistory.find(h => h.importId === this.currentImportId);
                     return found ? found.excelFileUrl : '';
+                },
+                cmProvinceOptions() {
+                    const set = new Set(this.dashboard.cmTickets.map(t => t.province).filter(Boolean));
+                    return Array.from(set).sort();
+                },
+                sortedCmTickets() {
+                    // Overdue first (most overdue first), then open tickets soonest-due first, finished last
+                    const list = this.dashboard.cmTickets.filter(t => {
+                        if (this.cmStatusFilter && this.displayStatus(t) !== this.cmStatusFilter) return false;
+                        if (this.cmProvinceFilter && t.province !== this.cmProvinceFilter) return false;
+                        return true;
+                    });
+                    return list.slice().sort((a, b) => {
+                        const rank = t => t.status === 'เสร็จสิ้น' ? 2 : (t.slaHoursLeft < 0 ? 0 : 1);
+                        const ra = rank(a), rb = rank(b);
+                        if (ra !== rb) return ra - rb;
+                        return a.slaHoursLeft - b.slaHoursLeft;
+                    });
+                },
+                overdueCmCount() {
+                    return this.dashboard.cmTickets.filter(t => this.displayStatus(t) === 'เกิน SLA').length;
                 },
             },
             async mounted() {
@@ -513,7 +629,8 @@
                 async loadDashboard(importId) {
                     try {
                         this.apiError = '';
-                        this.dashboard = await this.api('getDashboardData', { importId });
+                        const data = await this.api('getDashboardData', { importId });
+                        this.dashboard = Object.assign({ equipmentFailureSummary: [], staffSummary: [] }, data);
                         this.$nextTick(() => this.renderMainCharts());
                     } catch (err) {
                         this.apiError = err.message;
@@ -605,6 +722,23 @@
                     }
                 },
 
+                async openTicketDetail(item) {
+                    this.showTicketModal = true;
+                    this.ticketDetail = null;
+                    this.ticketDetailLoading = true;
+                    try {
+                        this.ticketDetail = await this.api('getWorkOrderDetail', { importId: this.currentImportId, ticketId: item.ticketId });
+                    } catch (err) {
+                        this.ticketDetail = null; // treat any error the same as "no extra detail" rather than blocking the modal
+                    } finally {
+                        this.ticketDetailLoading = false;
+                    }
+                },
+                closeTicketModal() {
+                    this.showTicketModal = false;
+                    this.ticketDetail = null;
+                },
+
                 displayStatus(item) {
                     if (item.status !== 'เสร็จสิ้น' && item.slaHoursLeft < 0) return 'เกิน SLA';
                     return item.status;
@@ -623,6 +757,8 @@
                 getStatusBadgeClass(status) {
                     if (status === 'เสร็จสิ้น') return 'bg-emerald-100 text-emerald-700';
                     if (status === 'กำลังดำเนินการ') return 'bg-blue-100 text-blue-700';
+                    if (status === 'งาน PM') return 'bg-purple-100 text-purple-700';
+                    if (status === 'รออนุมัติ') return 'bg-amber-100 text-amber-700';
                     if (status === 'เกิน SLA') return 'bg-red-100 text-red-700';
                     return 'bg-slate-100 text-slate-700';
                 },
@@ -640,11 +776,13 @@
                 },
 
                 renderMainCharts() {
-                    const statusCounts = { 'รอดำเนินการ': 0, 'กำลังดำเนินการ': 0, 'เสร็จสิ้น': 0, 'เกิน SLA': 0 };
+                    const statusCounts = { 'รอดำเนินการ': 0, 'รออนุมัติ': 0, 'กำลังดำเนินการ': 0, 'งาน PM': 0, 'เสร็จสิ้น': 0, 'เกิน SLA': 0 };
                     this.dashboard.cmTickets.forEach(t => {
                         const s = this.displayStatus(t);
                         statusCounts[s] = (statusCounts[s] || 0) + 1;
                     });
+                    // Don't clutter the pie chart with statuses that never occurred this round
+                    Object.keys(statusCounts).forEach(k => { if (statusCounts[k] === 0) delete statusCounts[k]; });
 
                     if (this.charts.overall) this.charts.overall.destroy();
                     this.charts.overall = new Chart(document.getElementById('overallChart'), {
@@ -653,7 +791,14 @@
                             labels: Object.keys(statusCounts),
                             datasets: [{
                                 data: Object.values(statusCounts),
-                                backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444'],
+                                backgroundColor: Object.keys(statusCounts).map(k => ({
+                                    'รอดำเนินการ': '#f59e0b',
+                                    'รออนุมัติ': '#d97706',
+                                    'กำลังดำเนินการ': '#3b82f6',
+                                    'งาน PM': '#8b5cf6',
+                                    'เสร็จสิ้น': '#10b981',
+                                    'เกิน SLA': '#ef4444',
+                                }[k])),
                             }],
                         },
                         options: { responsive: true, maintainAspectRatio: false },
