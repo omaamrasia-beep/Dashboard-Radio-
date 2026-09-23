@@ -90,6 +90,15 @@
             <!-- ==================== DASHBOARD VIEW ==================== -->
             <template v-if="currentView === 'dashboard'">
 
+            <!-- INITIAL LOAD: nothing for the first 1s (avoids a needless flash on a fast load), then a spinner if it's genuinely slow -->
+            <div v-if="initialLoading">
+                <div v-if="showInitialLoader" class="py-24 flex flex-col items-center justify-center text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-purple-500 mb-3"></i>
+                    <p class="text-sm">กำลังโหลดข้อมูลแดชบอร์ด...</p>
+                </div>
+            </div>
+            <template v-else>
+
             <!-- SLA OVERDUE BANNER -->
             <div v-if="overdueCmCount > 0" class="bg-red-600 text-white text-sm font-bold p-3 rounded-lg">
                 มีงาน CM เกิน SLA อยู่ {{ overdueCmCount }} รายการ — กรุณาตรวจสอบด่วน
@@ -350,6 +359,7 @@
             </div>
 
             </template>
+            </template>
             <!-- ==================== END DASHBOARD VIEW ==================== -->
 
             <!-- TICKET DETAIL MODAL (shared across views) -->
@@ -390,14 +400,14 @@
                     <i class="fa-solid fa-users-gear text-purple-600 mr-2"></i> จัดการผู้ใช้งาน
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-3">
+                    <div class="space-y-3 flex flex-col">
                         <p class="text-xs font-bold text-slate-500 uppercase">นำเข้า / ส่งออก จาก Excel</p>
                         <div @dragover.prevent="userImport.dragOver = true"
                              @dragleave.prevent="userImport.dragOver = false"
                              @drop.prevent="handleUserImportDrop"
                              @click="$refs.userImportInput.click()"
                              :class="userImport.dragOver ? 'border-purple-500 bg-purple-50' : 'border-slate-300'"
-                             class="border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition">
+                             class="border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition flex-1 flex flex-col items-center justify-center">
                             <input ref="userImportInput" type="file" accept=".xlsx,.xls" class="hidden" @change="handleUserImportChange">
                             <i class="fa-solid text-2xl text-purple-500 mb-2" :class="userImport.importing ? 'fa-spinner fa-spin' : 'fa-file-excel'"></i>
                             <p class="text-sm text-slate-600">{{ userImport.importing ? 'กำลังนำเข้า...' : 'ลากไฟล์ Excel มาวาง หรือคลิกเพื่อแนบไฟล์' }}</p>
@@ -516,6 +526,8 @@
                     currentView: 'dashboard', // 'dashboard' | 'users'
 
                     apiError: '',
+                    initialLoading: false,
+                    showInitialLoader: false,
                     searchQuery: '',
                     cmStatusFilter: '',
                     cmProvinceFilter: '',
@@ -598,9 +610,7 @@
                 if (saved) {
                     try {
                         this.session = JSON.parse(saved);
-                        await this.loadImportHistory();
-                        await this.loadReportFiles();
-                        if (this.session.role === 'admin') await this.loadUsers();
+                        await this.bootstrapLoad();
                     } catch (err) {
                         this.session = null;
                         localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -634,9 +644,7 @@
                         this.session = json.data;
                         localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(this.session));
                         this.loginForm = { username: '', password: '', loading: false, error: '' };
-                        await this.loadImportHistory();
-                        await this.loadReportFiles();
-                        if (this.session.role === 'admin') await this.loadUsers();
+                        await this.bootstrapLoad();
                     } catch (err) {
                         this.loginForm.error = err.message;
                         this.loginForm.loading = false;
@@ -686,6 +694,43 @@
                         throw new Error(json.error || 'ไม่ทราบสาเหตุ');
                     }
                     return json.data;
+                },
+
+                /**
+                 * Single combined call replacing the old sequence of
+                 * getImportHistory -> getDashboardData+getProvinceStats -> getReportFiles
+                 * (-> getUsers for admin) — 4-5 separate round trips to the Web App down to
+                 * 1, so first paint after login/reload only waits on one request. Shows
+                 * nothing for the first second (a fast load shouldn't flash a spinner), then
+                 * a spinner if the request is genuinely slow.
+                 */
+                async bootstrapLoad() {
+                    this.initialLoading = true;
+                    this.showInitialLoader = false;
+                    const timer = setTimeout(() => { if (this.initialLoading) this.showInitialLoader = true; }, 1000);
+                    try {
+                        this.apiError = '';
+                        const data = await this.api('bootstrap', { reportRangeMonths: this.reportRange });
+                        this.importHistory = data.importHistory || [];
+                        if (this.importHistory.length > 0) this.currentImportId = this.importHistory[0].importId;
+                        this.dashboard = Object.assign({ equipmentFailureSummary: [], staffSummary: [] }, data.dashboard);
+                        this.provinceStats = Object.assign({ byProvince: [], bySite: [] }, data.provinceStats);
+                        this.reportFiles = data.reportFiles || [];
+                        if (this.session.role === 'admin') {
+                            this.users = data.users || [];
+                            this.userRows = this.users.map(u => ({
+                                username: u.username, displayName: u.displayName, role: u.role,
+                                password: '', saving: false, error: '',
+                            }));
+                        }
+                        this.$nextTick(() => this.renderMainCharts());
+                    } catch (err) {
+                        this.apiError = err.message;
+                    } finally {
+                        clearTimeout(timer);
+                        this.initialLoading = false;
+                        this.showInitialLoader = false;
+                    }
                 },
 
                 async loadImportHistory() {
