@@ -412,18 +412,17 @@
                         <button @click="closeAddCmModal" class="text-slate-400 hover:text-slate-700 text-sm font-bold">ปิด</button>
                     </div>
                     <div class="p-4 text-sm space-y-3">
-                        <p class="text-xs text-slate-400">กรอกเท่าที่มีข้อมูลได้เลย ช่องที่เว้นว่างจะแสดงเป็น "-" ในตาราง — บันทึกแล้วจะไปเพิ่มแถวใหม่ในชีท Google Sheets (CMTickets) ของรอบข้อมูลที่กำลังเลือกอยู่</p>
                         <div>
-                            <label class="text-xs font-bold text-slate-500">Ticket ID (เว้นว่าง = สร้างให้อัตโนมัติ)</label>
+                            <label class="text-xs font-bold text-slate-500">Ticket ID</label>
                             <input v-model="addCmForm.ticketId" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
-                            <input v-model="addCmForm.site" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="addCmForm.site" type="text" list="siteNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500">จังหวัด</label>
-                            <input v-model="addCmForm.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="addCmForm.province" type="text" list="provinceNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500">อุปกรณ์ที่ขัดข้อง</label>
@@ -460,12 +459,12 @@
                     </div>
                     <div class="p-4 text-sm space-y-3">
                         <div>
-                            <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์ (ชื่อดิบ)</label>
-                            <input v-model="editSiteForm.location" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <label class="text-xs font-bold text-slate-500">สถานที่ติดตั้งอุปกรณ์</label>
+                            <input v-model="editSiteForm.location" type="text" list="siteNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500">จังหวัด</label>
-                            <input v-model="editSiteForm.province" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            <input v-model="editSiteForm.province" type="text" list="provinceNameList" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
                         </div>
                         <p v-if="editSiteForm.error" class="text-xs text-red-600">{{ editSiteForm.error }}</p>
                         <button @click="submitEditSite" :disabled="editSiteForm.saving" class="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2.5 rounded-lg transition">
@@ -474,6 +473,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Shared autocomplete option lists for the modals above (native <datalist> — no extra library needed) -->
+            <datalist id="siteNameList">
+                <option v-for="name in siteNameOptions" :key="name" :value="name"></option>
+            </datalist>
+            <datalist id="provinceNameList">
+                <option v-for="p in provinceOptions" :key="p" :value="p"></option>
+            </datalist>
 
             <!-- ==================== USER MANAGEMENT VIEW (Admin only) ==================== -->
             <template v-if="currentView === 'users' && session.role === 'admin'">
@@ -667,6 +674,12 @@
                 },
                 provinceOptions() {
                     return this.provinceStats.byProvince.map(p => p.province).sort();
+                },
+                siteNameOptions() {
+                    // Known site names for this round, used as autocomplete suggestions
+                    // (list="siteNameList") on the "สถานที่ติดตั้งอุปกรณ์" fields.
+                    const set = new Set(this.dashboard.installationSites.map(s => s.location).filter(Boolean));
+                    return Array.from(set).sort();
                 },
                 siteOptionsForProvince() {
                     if (!this.provinceFilter) return [];
