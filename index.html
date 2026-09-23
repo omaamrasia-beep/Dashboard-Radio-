@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maintenance Dashboard - PEA C1</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!--
+      Self-hosted vendor libraries (ดูขั้นตอนดาวน์โหลด/build ที่ vendor/README_DOWNLOAD_VENDOR_FILES.md
+      และ tailwind-build/README.md) — เดิมโหลดจาก CDN สาธารณะ (cdn.tailwindcss.com, jsdelivr,
+      unpkg, cdnjs) ซึ่งบางเครือข่ายองค์กร (เช่น PEA) บล็อกโดเมนพวกนี้ ทำให้หน้าเว็บช้า/พังเวลาเปิดจากใน
+      เครือข่ายนั้น เปลี่ยนมาเสิร์ฟจาก origin เดียวกับตัวเว็บเอง เหลือ external request จุดเดียวคือเรียก
+      Apps Script Web App ตอนดึงข้อมูลเท่านั้น
+    -->
+    <link rel="stylesheet" href="./vendor/tailwind.css">
+    <script src="./vendor/chart.umd.min.js"></script>
+    <script src="./vendor/vue.global.prod.js"></script>
+    <script src="./vendor/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./vendor/fontawesome/css/all.min.css">
 </head>
 <body class="bg-slate-100 font-sans text-slate-800">
 
@@ -140,12 +147,12 @@
                 </div>
             </div>
 
-            <!-- KPI SUMMARY CARDS -->
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <!-- KPI SUMMARY CARDS: 1 การ์ดต่อประเภทอุปกรณ์ (BTS/DPC/MSO/...) จำนวนคอลัมน์เท่าจำนวนประเภทที่เจอจริง เพื่อให้อยู่แถวเดียวกันพอดีเสมอ -->
+            <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                 <div v-for="site in dashboard.sitesSummary" :key="site.type" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-bold text-slate-500 uppercase">{{ site.type }}</span>
-                        <i class="fa-solid fa-tower-cell text-purple-600 text-lg"></i>
+                        <i class="fa-solid text-purple-600 text-lg" :class="'fa-' + (site.icon || 'microchip')"></i>
                     </div>
                     <div class="text-2xl font-extrabold text-slate-800">{{ site.count }} <span class="text-xs font-normal text-slate-500">{{ site.unit }}</span></div>
                     <p class="text-[11px] text-emerald-600 mt-1"><i class="fa-solid fa-check-circle"></i> พร้อมใช้งานปกติ</p>
@@ -170,6 +177,8 @@
                     <div class="relative h-64">
                         <canvas id="overallChart"></canvas>
                     </div>
+                    <!-- legend เขียนเอง (ไม่ใช้ของ built-in ของ Chart.js) เพื่อให้ตอนกดปิดรายการ สีกับตัวอักษรจางลงแทนการขีดฆ่า -->
+                    <div id="overallChartLegend" class="flex flex-wrap gap-x-4 gap-y-1.5 justify-center mt-3"></div>
                     <div v-if="!donutHasData" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูลงาน PM/CM สำหรับรอบนี้ (ถ้ามั่นใจว่ามีข้อมูล ให้ตรวจหัวคอลัมน์ชีท CMTickets)</div>
                 </div>
                 <div class="md:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
@@ -359,11 +368,15 @@
                         <h2 class="font-bold text-slate-800 flex items-center">
                             <i class="fa-solid fa-cloud-arrow-down text-blue-600 mr-2"></i> รายงานการซ่อมบำรุง
                         </h2>
-                        <select v-model.number="reportRange" @change="loadReportFiles" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
-                            <option :value="1">ย้อนหลัง 1 เดือน</option>
-                            <option :value="6">ย้อนหลัง 6 เดือน</option>
-                            <option :value="0">ทั้งหมด</option>
-                        </select>
+                        <div class="flex items-center gap-1.5">
+                            <select v-model.number="reportYear" @change="loadReportFiles" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
+                                <option v-for="y in reportYearOptions" :key="y" :value="y">ปี {{ y }}</option>
+                            </select>
+                            <select v-model="reportMonth" @change="loadReportFiles" class="text-xs border border-slate-300 rounded-lg p-1.5 focus:outline-none">
+                                <option value="">ทั้งปี</option>
+                                <option v-for="(m, idx) in thaiMonths" :key="idx" :value="idx + 1">{{ m }}</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="space-y-2 max-h-72 overflow-y-auto">
@@ -376,7 +389,7 @@
                                 </div>
                             </div>
                             <a :href="report.url" target="_blank" class="bg-slate-100 hover:bg-purple-100 text-purple-700 px-2.5 py-1 rounded text-xs transition shrink-0 ml-2">
-                                <i class="fa-solid fa-download mr-1"></i> เปิด
+                                <i class="fa-solid fa-download mr-1"></i> ดาวน์โหลด
                             </a>
                         </div>
                         <div v-if="reportFiles.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่พบไฟล์ในช่วงเวลาที่เลือก</div>
@@ -703,9 +716,45 @@
     <script>
         const { createApp } = Vue;
 
+        /**
+         * Legend แบบเขียนเอง (HTML ธรรมดา ไม่ใช่ของ built-in ของ Chart.js) สำหรับกราฟโดนัท:
+         * ปกติ Chart.js จะขีดฆ่าข้อความของรายการที่ถูกกดปิดไว้ (built-in behaviour) — อันนี้เปลี่ยนเป็น
+         * ทำให้สีวงกลมกับตัวอักษรของรายการนั้นจางลงแทน โดยผูกกับ container ผ่าน options.plugins.htmlLegend.containerID
+         */
+        const htmlLegendPlugin = {
+            id: 'htmlLegend',
+            afterUpdate(chart, args, options) {
+                const container = document.getElementById(options.containerID);
+                if (!container) return;
+                container.innerHTML = '';
+                const items = chart.options.plugins.legend.labels.generateLabels(chart);
+                items.forEach((item) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'flex items-center gap-1.5 text-xs font-medium transition-opacity';
+                    btn.style.opacity = item.hidden ? '0.3' : '1';
+                    btn.onclick = () => {
+                        chart.toggleDataVisibility(item.index);
+                        chart.update();
+                    };
+                    const swatch = document.createElement('span');
+                    swatch.style.cssText = 'width:10px;height:10px;border-radius:9999px;display:inline-block;flex:none;background-color:' + item.fillStyle;
+                    const label = document.createElement('span');
+                    label.className = 'text-slate-600';
+                    label.textContent = item.text;
+                    btn.appendChild(swatch);
+                    btn.appendChild(label);
+                    container.appendChild(btn);
+                });
+            },
+        };
+
         // TODO: วาง Web App URL ที่ได้จากการ Deploy Google Apps Script ตรงนี้
         const API_URL = 'https://script.google.com/macros/s/AKfycbxxUCQk03kQGuj24D5dDrvoJjKhCWcwVpFByd73BYYtuIuzjaI668gU7gYTfRSjlTRa/exec';
         const TOKEN_STORAGE_KEY = 'p25_dashboard_session';
+        const THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+            'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+        const CURRENT_BUDDHIST_YEAR = new Date().getFullYear() + 543;
 
         createApp({
             data() {
@@ -735,7 +784,8 @@
                     importing: false,
 
                     reportFiles: [],
-                    reportRange: 1,
+                    reportYear: CURRENT_BUDDHIST_YEAR,
+                    reportMonth: '', // '' = ทั้งปี, 1-12 = เดือนนั้นๆ
 
                     users: [],
                     userRows: [],
@@ -762,6 +812,15 @@
                 };
             },
             computed: {
+                // ตัวเลือกปีของกล่อง "รายงานการซ่อมบำรุง" — ย้อนหลัง 5 ปีถึงปีถัดไป (เผื่อโฟลเดอร์เตรียมไว้ล่วงหน้า) เรียงใหม่สุดก่อน
+                reportYearOptions() {
+                    const years = [];
+                    for (let y = CURRENT_BUDDHIST_YEAR + 1; y >= CURRENT_BUDDHIST_YEAR - 5; y--) years.push(y);
+                    return years;
+                },
+                thaiMonths() {
+                    return THAI_MONTHS;
+                },
                 filteredInstallationSites() {
                     const list = this.dashboard.installationSites;
                     if (!this.searchQuery) return list;
@@ -941,7 +1000,7 @@
                     const timer = setTimeout(() => { if (this.initialLoading) this.showInitialLoader = true; }, 1000);
                     try {
                         this.apiError = '';
-                        const data = await this.api('bootstrap', { reportRangeMonths: this.reportRange });
+                        const data = await this.api('bootstrap', { reportYear: this.reportYear, reportMonth: this.reportMonth || undefined });
                         if (!data) throw new Error('BOOTSTRAP_EMPTY_RESPONSE');
                         this.importHistory = data.importHistory || [];
                         if (this.importHistory.length > 0) this.currentImportId = this.importHistory[0].importId;
@@ -1029,7 +1088,7 @@
 
                 async loadReportFiles() {
                     try {
-                        this.reportFiles = await this.api('getReportFiles', { rangeMonths: this.reportRange });
+                        this.reportFiles = await this.api('getReportFiles', { year: this.reportYear, month: this.reportMonth || undefined });
                     } catch (err) {
                         this.apiError = err.message;
                     }
@@ -1367,8 +1426,6 @@
                     if (!value) return '-';
                     const d = new Date(value);
                     if (isNaN(d)) return String(value);
-                    const THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-                        'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
                     return THAI_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543);
                 },
                 formatDateTime(value) {
@@ -1379,13 +1436,13 @@
                 },
 
                 renderMainCharts() {
-                    // เดิมถ้า Chart.js โหลดไม่สำเร็จ (เช่นโดนไฟร์วอลล์ขององค์กรบล็อก cdn.jsdelivr.net)
+                    // เดิมถ้า Chart.js โหลดไม่สำเร็จ (เช่นไฟล์ vendor/chart.umd.min.js หาย/พาธผิด)
                     // หรือ renderOverallChart/renderProvinceChart โยน error ใดๆ กราฟจะค้างว่างเปล่าแบบเงียบๆ
                     // ไม่มีทางรู้ได้จากหน้าเว็บเลยว่าเกิดอะไรขึ้น — ตอนนี้จับ error แล้วโชว์ข้อความให้เห็นแทน
                     this.chartsError = '';
                     try {
                         if (typeof Chart === 'undefined') {
-                            throw new Error('โหลดไลบรารี Chart.js ไม่สำเร็จ (สคริปต์จาก cdn.jsdelivr.net อาจถูกไฟร์วอลล์/พร็อกซีขององค์กรบล็อกอยู่ — ลองเปิดหน้านี้จากเครือข่ายอื่น หรือแจ้งฝ่าย IT ให้ปลดบล็อกโดเมนนี้)');
+                            throw new Error('โหลดไลบรารี Chart.js ไม่สำเร็จ (เช็คว่าไฟล์ vendor/chart.umd.min.js อยู่ครบและ path ถูกต้องหรือไม่ — ดู vendor/README_DOWNLOAD_VENDOR_FILES.md)');
                         }
                         this.renderOverallChart();
                         this.renderProvinceChart();
@@ -1451,6 +1508,8 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
+                                legend: { display: false }, // ใช้ legend แบบเขียนเอง (htmlLegendPlugin) ด้านล่างกราฟแทน
+                                htmlLegend: { containerID: 'overallChartLegend' },
                                 tooltip: {
                                     callbacks: {
                                         label: (item) => {
@@ -1473,6 +1532,7 @@
                                 this.renderOverallChart();
                             },
                         },
+                        plugins: [htmlLegendPlugin],
                     });
                 },
                 resetDonut() {
@@ -1623,6 +1683,24 @@
                 },
             },
             watch: {
+                currentView(val, oldVal) {
+                    // ออกจากหน้าแดชบอร์ด: v-if="currentView === 'dashboard'" จะลบ <canvas> เดิมออกจาก
+                    // DOM ทั้งหมด ต้อง destroy Chart instance ก่อน ไม่งั้น listener เดิมจะค้างผูกกับ
+                    // canvas ที่ถูกลบไปแล้ว (ต้นเหตุ error "Cannot read properties of undefined
+                    // (reading 'handleEvent')" ที่เจอตอนกลับมาหน้าแดชบอร์ด)
+                    if (oldVal === 'dashboard' && val !== 'dashboard') {
+                        ['overall', 'site', 'trend'].forEach((key) => {
+                            if (this.charts[key]) { this.charts[key].destroy(); this.charts[key] = null; }
+                        });
+                    }
+                    // กลับมาหน้าแดชบอร์ด: <canvas> ที่ Vue สร้างขึ้นใหม่ยังไม่มีกราฟใดๆ วาดอยู่เลย ต้องวาดใหม่
+                    if (val === 'dashboard') {
+                        this.$nextTick(() => {
+                            this.renderMainCharts();
+                            if (this.showTrend) this.renderTrendChart();
+                        });
+                    }
+                },
                 showTrend(val) {
                     if (val) this.loadTrend();
                 },
