@@ -273,36 +273,6 @@
                 </div>
             </div>
 
-            <!-- EQUIPMENT FAILURE SUMMARY & STAFF SUMMARY (from the raw work-order report, if this round has one) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <h2 class="font-bold text-slate-800 mb-1">อุปกรณ์ที่พบปัญหาบ่อย (ตามประเภท)</h2>
-                    <p class="text-xs text-slate-500 mb-3">นับจากใบงาน CM ของรอบนี้ แยกตามประเภทอุปกรณ์ (BTS / MSO / DPC ฯลฯ)</p>
-                    <div class="space-y-2">
-                        <div v-for="e in dashboard.equipmentFailureSummary" :key="e.type" class="text-xs">
-                            <div class="flex justify-between mb-1"><span class="font-semibold text-slate-700">{{ e.type }}</span><span class="text-slate-500">{{ e.count }} ครั้ง</span></div>
-                            <div class="w-full bg-slate-100 rounded-full h-2">
-                                <div class="bg-amber-500 h-2 rounded-full" :style="{ width: (e.count / (dashboard.equipmentFailureSummary[0].count || 1) * 100) + '%' }"></div>
-                            </div>
-                        </div>
-                        <div v-if="dashboard.equipmentFailureSummary.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูล (รอบนี้นำเข้าด้วย template แบบเดิม)</div>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <h2 class="font-bold text-slate-800 mb-1">สรุปงานที่ปิดต่อช่าง</h2>
-                    <p class="text-xs text-slate-500 mb-3">นับงานที่มีสถานะ "เสร็จสิ้น" ของรอบนี้ ต่อรายชื่อช่างที่ระบุในใบงาน</p>
-                    <div class="space-y-2">
-                        <div v-for="s in dashboard.staffSummary" :key="s.staff" class="text-xs">
-                            <div class="flex justify-between mb-1"><span class="font-semibold text-slate-700">{{ s.staff }}</span><span class="text-slate-500">{{ s.count }} งาน</span></div>
-                            <div class="w-full bg-slate-100 rounded-full h-2">
-                                <div class="bg-emerald-500 h-2 rounded-full" :style="{ width: (s.count / (dashboard.staffSummary[0].count || 1) * 100) + '%' }"></div>
-                            </div>
-                        </div>
-                        <div v-if="dashboard.staffSummary.length === 0" class="text-center text-sm text-slate-400 py-4">ไม่มีข้อมูล (รอบนี้นำเข้าด้วย template แบบเดิม)</div>
-                    </div>
-                </div>
-            </div>
-
             <!-- PM STATUS & REPORT LIBRARY -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
