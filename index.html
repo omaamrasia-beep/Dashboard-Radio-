@@ -1700,6 +1700,14 @@
                             if (this.showTrend) this.renderTrendChart();
                         });
                     }
+                    // (lazy-load, ข้อ 5.2) เปิดแท็บ "จัดการผู้ใช้งาน": bootstrap ไม่ได้ส่งรายชื่อ user
+                    // (`getUsers_()` อ่านทั้งชีท Users ทุกครั้ง แต่ไม่ได้ใช้ที่หน้าแดชบอร์ดหลักเลย)
+                    // มาให้แล้ว — โหลดตรงนี้แทน ทุกครั้งที่เปิดแท็บ (เหมือน showTrend ด้านล่าง) เพื่อให้
+                    // รายชื่อ user สดใหม่เสมอ ไม่ใช่โหลดครั้งเดียวค้างไว้ (sheetLinks ยังมากับ bootstrap
+                    // ตามเดิม เพราะปุ่ม "เปิด Google Sheet" ใช้ตรงในหน้าแดชบอร์ดหลัก ไม่ใช่แค่แท็บนี้)
+                    if (val === 'users' && this.session && this.session.role === 'admin') {
+                        this.loadUsers();
+                    }
                 },
                 showTrend(val) {
                     if (val) this.loadTrend();
