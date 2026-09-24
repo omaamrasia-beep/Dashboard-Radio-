@@ -257,8 +257,7 @@
                         <tbody class="divide-y divide-slate-100">
                             <tr v-for="item in sortedCmTickets" :key="item.ticketId" class="hover:bg-slate-50">
                                 <td class="p-3 font-mono font-bold text-purple-700">
-                                    <button v-if="session.role === 'admin'" @click="openTicketDetail(item)" class="underline decoration-dotted hover:text-purple-900">{{ item.ticketId }}</button>
-                                    <span v-else>{{ item.ticketId }}</span>
+                                    <button @click="openTicketDetail(item)" class="underline decoration-dotted hover:text-purple-900">{{ item.ticketId }}</button>
                                 </td>
                                 <td class="p-3"><span class="font-semibold block">{{ friendlySiteName(item.site) }}</span><span class="text-xs text-slate-400">{{ item.province || '-' }}</span></td>
                                 <td class="p-3"><span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200">{{ item.system || '-' }}</span></td>
