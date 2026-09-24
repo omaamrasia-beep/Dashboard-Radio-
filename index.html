@@ -658,48 +658,27 @@
                                     <th class="text-left p-2.5">ชื่อผู้ใช้งาน</th>
                                     <th class="text-left p-2.5">ชื่อที่แสดง</th>
                                     <th class="text-left p-2.5">สิทธิ์</th>
-                                    <th class="text-left p-2.5">รหัสผ่านใหม่</th>
-                                    <th class="text-left p-2.5 w-28">การจัดการ</th>
+                                    <th class="text-center p-2.5 w-16">จัดการ</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="row in userRows" :key="row.username" class="border-t border-slate-100 align-top">
+                                <tr v-for="row in userRows" :key="row.username" class="border-t border-slate-100">
                                     <td class="p-2.5 text-slate-500">{{ row.username }}</td>
+                                    <td class="p-2.5 text-slate-700">{{ row.displayName }}</td>
                                     <td class="p-2.5">
-                                        <input v-if="row.role !== 'admin'" v-model="row.displayName" type="text"
-                                               class="w-full text-sm border border-slate-300 rounded p-1.5 focus:outline-none focus:border-purple-500">
-                                        <span v-else class="text-slate-600">{{ row.displayName }}</span>
-                                        <p v-if="row.error" class="text-xs text-red-600 mt-1">{{ row.error }}</p>
+                                        <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{{ roleLabel(row.role) }}</span>
                                     </td>
-                                    <td class="p-2.5">
-                                        <select v-if="row.role !== 'admin'" v-model="row.role"
-                                                class="w-full text-sm border border-slate-300 rounded p-1.5 focus:outline-none focus:border-purple-500">
-                                            <option value="pea">เจ้าหน้าที่ PEA</option>
-                                            <option value="admin">ผู้ดูแลระบบ</option>
-                                        </select>
-                                        <span v-else class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{{ roleLabel(row.role) }}</span>
-                                    </td>
-                                    <td class="p-2.5">
-                                        <input v-if="row.role !== 'admin'" v-model="row.password" type="password" placeholder="เว้นว่าง = ไม่เปลี่ยน"
-                                               class="w-full text-sm border border-slate-300 rounded p-1.5 focus:outline-none focus:border-purple-500">
-                                        <span v-else class="text-xs text-slate-400"><i class="fa-solid fa-lock mr-1"></i>ป้องกันไว้</span>
-                                    </td>
-                                    <td class="p-2.5">
-                                        <div v-if="row.role !== 'admin'" class="flex items-center gap-1.5">
-                                            <button @click="saveUserRow(row)" :disabled="row.saving"
-                                                    class="text-xs px-2.5 py-1.5 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium">
-                                                {{ row.saving ? '...' : 'บันทึก' }}
-                                            </button>
-                                            <button @click="removeUserRow(row)" :disabled="row.saving"
-                                                    class="text-xs px-2.5 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 font-medium">
-                                                ลบ
-                                            </button>
-                                        </div>
-                                        <span v-else class="text-xs text-slate-300">-</span>
+                                    <td class="p-2.5 text-center">
+                                        <!-- ปุ่มฟันเฟือง (theme เดียวกับปุ่มแก้ไขของตารางอื่นในเว็บ เช่น รายการ CM/สถานที่ติดตั้ง)
+                                             เปิด pop-up แก้ไขแทนการแก้ตรงในตารางแบบเดิม — บัญชี admin หลักแก้/ลบไม่ได้เหมือนเดิม -->
+                                        <button v-if="row.role !== 'admin'" @click="openEditUserModal(row)" title="แก้ไขผู้ใช้งาน" class="text-slate-300 hover:text-purple-600 transition">
+                                            <i class="fa-solid fa-gear"></i>
+                                        </button>
+                                        <span v-else class="text-xs text-slate-300"><i class="fa-solid fa-lock" title="บัญชีนี้ป้องกันไว้"></i></span>
                                     </td>
                                 </tr>
                                 <tr v-if="userRows.length === 0">
-                                    <td colspan="5" class="text-sm text-slate-400 text-center py-4">ยังไม่มีผู้ใช้งาน</td>
+                                    <td colspan="4" class="text-sm text-slate-400 text-center py-4">ยังไม่มีผู้ใช้งาน</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -708,6 +687,70 @@
             </div>
             </template>
             <!-- ==================== END USER MANAGEMENT VIEW ==================== -->
+
+            <!-- pop-up แก้ไขผู้ใช้งาน (ชื่อที่แสดง/สิทธิ์/รหัสผ่านใหม่) เปิดจากปุ่มฟันเฟืองในตาราง -->
+            <div v-if="showEditUserModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="closeEditUserModal">
+                <div class="bg-white rounded-xl shadow-lg max-w-sm w-full relative">
+                    <button @click="closeEditUserModal" title="ปิด" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-slate-700 transition">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                    <div class="p-5">
+                        <h3 class="font-bold text-slate-800 mb-0.5 flex items-center pr-6">
+                            <i class="fa-solid fa-user-gear text-purple-600 mr-2"></i> แก้ไขผู้ใช้งาน
+                        </h3>
+                        <p class="text-xs text-slate-400 mb-4">ชื่อผู้ใช้งาน: <span class="text-slate-600 font-medium">{{ editUserForm.username }}</span></p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">ชื่อที่แสดง</label>
+                                <input v-model="editUserForm.displayName" type="text" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">สิทธิ์</label>
+                                <select v-model="editUserForm.role" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                                    <option value="pea">เจ้าหน้าที่ PEA</option>
+                                    <option value="admin">ผู้ดูแลระบบ</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">รหัสผ่านใหม่</label>
+                                <input v-model="editUserForm.password" type="password" placeholder="เว้นว่าง = ไม่เปลี่ยน" class="w-full text-sm border border-slate-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <p v-if="editUserForm.error" class="text-xs text-red-600">{{ editUserForm.error }}</p>
+                        </div>
+                        <div class="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
+                            <button @click="openDeleteUserConfirm" class="text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-medium">
+                                <i class="fa-solid fa-trash mr-1.5"></i> ลบผู้ใช้งาน
+                            </button>
+                            <button @click="saveEditUserModal" :disabled="editUserForm.saving" class="text-xs px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium">
+                                {{ editUserForm.saving ? 'กำลังบันทึก...' : 'บันทึก' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- pop-up ยืนยันลบ (ซ้อนอยู่บน pop-up แก้ไขผู้ใช้งาน — z-[60] สูงกว่า) ปุ่มยืนยันอยู่ขวา ยกเลิกอยู่ซ้าย ตามที่ขอ -->
+            <div v-if="showDeleteUserConfirm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" @click.self="closeDeleteUserConfirm">
+                <div class="bg-white rounded-xl shadow-lg max-w-xs w-full relative p-5">
+                    <button @click="closeDeleteUserConfirm" title="ปิด" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-slate-700 transition">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                    <h3 class="font-bold text-slate-800 mb-2 flex items-center pr-6">
+                        <i class="fa-solid fa-triangle-exclamation text-red-500 mr-2"></i> ยืนยันการลบ
+                    </h3>
+                    <p class="text-sm text-slate-600 mb-5">ต้องการลบผู้ใช้งาน "{{ editUserForm.displayName }}" ({{ editUserForm.username }}) ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้</p>
+                    <p v-if="deleteUserError" class="text-xs text-red-600 mb-3">{{ deleteUserError }}</p>
+                    <div class="flex items-center gap-3">
+                        <button @click="closeDeleteUserConfirm" class="flex-1 text-xs px-3 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-600 font-medium">
+                            ยกเลิก
+                        </button>
+                        <button @click="deleteUserConfirmed" :disabled="deletingUser" class="flex-1 text-xs px-3 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium">
+                            {{ deletingUser ? 'กำลังลบ...' : 'ยืนยันลบ' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- ==================== END USER MANAGEMENT POP-UPS ==================== -->
 
         </main>
         </template>
@@ -790,6 +833,12 @@
                     users: [],
                     userRows: [],
                     newUserForm: { username: '', password: '', displayName: '', role: 'pea', saving: false, error: '' },
+                    // pop-up แก้ไขผู้ใช้งาน (แทนการแก้ inline ในตารางแบบเดิม)
+                    showEditUserModal: false,
+                    editUserForm: { username: '', displayName: '', role: 'pea', password: '', saving: false, error: '' },
+                    showDeleteUserConfirm: false,
+                    deletingUser: false,
+                    deleteUserError: '',
                     userImport: { dragOver: false, importing: false, error: '', result: null },
 
                     charts: { overall: null, site: null, trend: null },
@@ -1126,7 +1175,6 @@
                         this.users = await this.api('getUsers');
                         this.userRows = this.users.map(u => ({
                             username: u.username, displayName: u.displayName, role: u.role,
-                            password: '', saving: false, error: '',
                         }));
                     } catch (err) {
                         this.apiError = err.message;
@@ -1189,32 +1237,52 @@
                     XLSX.writeFile(wb, 'user_list_export.xlsx');
                 },
 
-                async saveUserRow(row) {
-                    row.saving = true;
-                    row.error = '';
+                // เปิด pop-up แก้ไขผู้ใช้งาน (ชื่อที่แสดง/สิทธิ์/รหัสผ่านใหม่) — เข้าจากปุ่มฟันเฟืองในตาราง
+                openEditUserModal(row) {
+                    this.editUserForm = { username: row.username, displayName: row.displayName, role: row.role, password: '', saving: false, error: '' };
+                    this.showEditUserModal = true;
+                },
+                closeEditUserModal() {
+                    this.showEditUserModal = false;
+                },
+                async saveEditUserModal() {
+                    const f = this.editUserForm;
+                    f.saving = true;
+                    f.error = '';
                     try {
                         await this.api('updateUser', {
-                            username: row.username,
-                            displayName: row.displayName,
-                            role: row.role,
-                            password: row.password || undefined,
+                            username: f.username,
+                            displayName: f.displayName,
+                            role: f.role,
+                            password: f.password || undefined,
                         });
+                        this.showEditUserModal = false;
                         await this.loadUsers();
                     } catch (err) {
-                        row.error = err.message;
-                        row.saving = false;
+                        f.error = err.message;
+                        f.saving = false;
                     }
                 },
-
-                async removeUserRow(row) {
-                    if (!confirm('ยืนยันลบผู้ใช้งาน "' + row.displayName + '" (' + row.username + ')?')) return;
-                    row.saving = true;
+                // pop-up ยืนยันลบ — ซ้อนบน pop-up แก้ไข แทนการใช้ confirm() ของเบราว์เซอร์แบบเดิม
+                openDeleteUserConfirm() {
+                    this.deleteUserError = '';
+                    this.showDeleteUserConfirm = true;
+                },
+                closeDeleteUserConfirm() {
+                    this.showDeleteUserConfirm = false;
+                },
+                async deleteUserConfirmed() {
+                    this.deletingUser = true;
+                    this.deleteUserError = '';
                     try {
-                        await this.api('deleteUser', { username: row.username });
+                        await this.api('deleteUser', { username: this.editUserForm.username });
+                        this.showDeleteUserConfirm = false;
+                        this.showEditUserModal = false;
                         await this.loadUsers();
                     } catch (err) {
-                        row.error = err.message;
-                        row.saving = false;
+                        this.deleteUserError = err.message;
+                    } finally {
+                        this.deletingUser = false;
                     }
                 },
 
