@@ -756,7 +756,7 @@
     </div>
 
     <script>
-        const { createApp } = Vue;
+        const { createApp, markRaw } = Vue;
 
         /**
          * Legend แบบเขียนเอง (HTML ธรรมดา ไม่ใช่ของ built-in ของ Chart.js) สำหรับกราฟโดนัท:
@@ -1565,7 +1565,7 @@
                         .filter(x => x.value > 0);
                     const total = slices.reduce((s, x) => s + x.value, 0);
 
-                    this.charts.overall = new Chart(canvas, {
+                    this.charts.overall = markRaw(new Chart(canvas, {
                         type: 'doughnut',
                         data: {
                             labels: slices.map(x => x.label),
@@ -1596,11 +1596,12 @@
                                     this.donutFilter = 'cm';
                                     this.provinceViewMetric = 'cm';
                                 }
-                                this.renderOverallChart();
+                                // เลื่อนไปวาดใหม่หลัง event handler ของ Chart.js จบก่อน (ห้าม destroy chart ตัวเองระหว่างที่ยังประมวลผล event อยู่)
+                                setTimeout(() => this.renderOverallChart(), 0);
                             },
                         },
                         plugins: [htmlLegendPlugin],
-                    });
+                    }));
                 },
                 resetDonut() {
                     this.donutFilter = 'all';
@@ -1688,7 +1689,7 @@
                         ];
                     }
 
-                    this.charts.site = new Chart(canvas, {
+                    this.charts.site = markRaw(new Chart(canvas, {
                         type: 'bar',
                         data: { labels: rows.map(labelFn), datasets: [...equipmentDatasets, ...statusDatasets] },
                         options: {
@@ -1729,14 +1730,14 @@
                                 },
                             },
                         },
-                    });
+                    }));
                 },
 
                 renderTrendChart() {
                     const canvas = document.getElementById('trendChart');
                     if (!canvas) return;
                     if (this.charts.trend) this.charts.trend.destroy();
-                    this.charts.trend = new Chart(canvas, {
+                    this.charts.trend = markRaw(new Chart(canvas, {
                         type: 'line',
                         data: {
                             labels: this.trend.map(t => this.formatMonthYearThai(t.dataDate)),
@@ -1746,7 +1747,7 @@
                             ],
                         },
                         options: { responsive: true, maintainAspectRatio: false },
-                    });
+                    }));
                 },
             },
             watch: {
